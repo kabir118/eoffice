@@ -182,4 +182,12 @@ class User extends Authenticatable
                     ->wherePivotNull('read_at')
                     ->withPivot('read_at');
     }
+
+    /**
+     * Documents CC'd to this user for information.
+     */
+    public function ccDocuments(): BelongsToMany
+    {
+        return $this->belongsToMany(Document::class, 'document_cc', 'user_id', 'document_id')->withTimestamps();
+    }
 }

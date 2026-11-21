@@ -14,22 +14,42 @@
 
         <!-- Search Bar & Filter Row (Matching Screenshot) -->
         <div style="margin-bottom: 25px;">
-            <form action="{{ route('documents.myRemarks') }}" method="GET" style="display: flex; gap: 10px; max-width: 780px; flex-wrap: wrap; align-items: center;">
-                <div style="position: relative; flex-grow: 1; min-width: 240px;">
+            <form action="{{ route('documents.myRemarks') }}" method="GET" class="search-filter-form" style="display: flex; gap: 10px; max-width: 950px; flex-wrap: wrap; align-items: center;">
+                <div style="position: relative; flex-grow: 1; min-width: 220px;">
                     <i class="bi bi-search" style="position: absolute; left: 14px; top: 12px; color: var(--text-muted);"></i>
                     <input type="text" name="search" class="form-control" style="padding-left: 40px;" placeholder="Search files by ID, Subject, Description..." value="{{ $search ?? '' }}">
                 </div>
 
-                <select name="filter" class="form-control" onchange="this.form.submit()" style="width: auto; min-width: 175px; cursor: pointer; font-weight: 600; color: var(--primary-dark);">
-                    <option value="">-- All Files --</option>
-                    <option value="pending" {{ ($filter ?? '') === 'pending' ? 'selected' : '' }}>⌛ Pending Files</option>
-                    <option value="normal" {{ ($filter ?? '') === 'normal' ? 'selected' : '' }}>🟢 Normal Priority</option>
-                    <option value="urgent" {{ ($filter ?? '') === 'urgent' ? 'selected' : '' }}>🟠 Urgent Priority</option>
-                    <option value="most_urgent" {{ ($filter ?? '') === 'most_urgent' ? 'selected' : '' }}>🔴 Most Urgent Priority</option>
+                <!-- Live Initiator Filter Auto-complete -->
+                <div style="position: relative; min-width: 210px;">
+                    <input type="hidden" name="creator_id" id="filter_creator_id" value="{{ $creatorId ?? '' }}">
+                    <div style="display: flex; align-items: center; position: relative;">
+                        <i class="bi bi-person-search" style="position: absolute; left: 12px; color: var(--text-muted); z-index: 2;"></i>
+                        <input type="text" id="creator_search_input" class="form-control" style="padding-left: 36px; padding-right: 28px; font-weight: 500; font-size: 0.85rem;" placeholder="Filter by Initiator..." value="{{ $selectedCreator ? ($selectedCreator->designation ? $selectedCreator->designation->title . ' (' . $selectedCreator->name . ')' : $selectedCreator->name) : '' }}" autocomplete="off">
+                        @if(!empty($creatorId))
+                            <button type="button" id="clear_creator_btn" style="position: absolute; right: 8px; border: none; background: none; color: #e74c3c; cursor: pointer; font-size: 0.9rem;" title="Clear Initiator Filter">✖</button>
+                        @endif
+                    </div>
+                    <div id="creator_results_dropdown" class="dashboard-card" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; margin-top: 4px; max-height: 220px; overflow-y: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 1px solid var(--border-color); padding: 4px 0;">
+                    </div>
+                </div>
+
+                <select name="filter" class="form-control" onchange="this.form.submit()" style="width: auto; min-width: 190px; cursor: pointer; font-weight: 600; color: var(--primary-dark);">
+                    <option value="">-- All Filter Options --</option>
+                    <optgroup label="File Status">
+                        <option value="forwarded" {{ ($filter ?? '') === 'forwarded' ? 'selected' : '' }}>📤 Forwarded</option>
+                        <option value="pending" {{ ($filter ?? '') === 'pending' ? 'selected' : '' }}>⌛ Pending</option>
+                        <option value="completed" {{ ($filter ?? '') === 'completed' ? 'selected' : '' }}>✅ Completed</option>
+                    </optgroup>
+                    <optgroup label="Priority Level">
+                        <option value="normal" {{ ($filter ?? '') === 'normal' ? 'selected' : '' }}>🟢 Normal Priority</option>
+                        <option value="urgent" {{ ($filter ?? '') === 'urgent' ? 'selected' : '' }}>🟠 Urgent Priority</option>
+                        <option value="most_urgent" {{ ($filter ?? '') === 'most_urgent' ? 'selected' : '' }}>🔴 Most Urgent Priority</option>
+                    </optgroup>
                 </select>
 
                 <button type="submit" class="btn btn-primary">Search</button>
-                @if(!empty($search) || !empty($filter))
+                @if(!empty($search) || !empty($filter) || !empty($creatorId))
                     <a href="{{ route('documents.myRemarks') }}" class="btn btn-secondary" title="Clear Search & Filter">
                         <i class="bi bi-x-lg"></i> Clear
                     </a>
@@ -50,6 +70,7 @@
                         <tr>
                             <th>File No.</th>
                             <th>Subject</th>
+                            <th>Initiated By</th>
                             <th>Currently Held By</th>
                             <th>Created</th>
                             <th>Priority</th>
@@ -60,7 +81,28 @@
                         @foreach($documents as $doc)
                             <tr id="row-{{ $doc->id }}">
                                 <td style="font-weight: 600; color: var(--primary-color); white-space: nowrap;">{{ $doc->file_number }}</td>
-                                <td>{{ Str::limit($doc->title, 40) }}</td>
+                                <td>
+                                    <div style="display: flex; flex-direction: column;">
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <span style="color: var(--primary-dark); font-weight: 600;">{{ Str::limit($doc->title, 40) }}</span>
+                                            @if($doc->status === 'completed')
+                                                <span class="badge badge-status-completed" style="font-size: 0.65rem; padding: 2px 6px;">Closed</span>
+                                            @elseif($doc->status === 'assigned_back')
+                                                <span class="badge badge-status-assigned_back" style="font-size: 0.65rem; padding: 2px 6px;">Assigned Back</span>
+                                            @elseif($doc->status === 'draft')
+                                                <span class="badge" style="background-color: #95a5a6; color: white; font-size: 0.65rem; padding: 2px 6px;">Draft</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if($doc->creator && $doc->creator->designation)
+                                        <strong style="color: var(--primary-dark); display: block;">{{ $doc->creator->designation->title }}</strong>
+                                        <span style="font-size: 0.74rem; color: var(--text-muted); display: block;">({{ $doc->creator->name }})</span>
+                                    @else
+                                        <strong style="color: var(--primary-dark); display: block;">{{ $doc->creator ? $doc->creator->name : 'N/A' }}</strong>
+                                    @endif
+                                </td>
                                 <td>
                                     <span style="font-weight: 500;">{{ $doc->currentHolder ? $doc->currentHolder->name : 'N/A' }}</span>
                                     @if($doc->currentHolder && $doc->currentHolder->designation)
@@ -179,10 +221,65 @@
         });
     }
 
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
+    // Live Creator Autocomplete Search
+    document.addEventListener('DOMContentLoaded', function() {
+        const creatorInput = document.getElementById('creator_search_input');
+        const creatorHidden = document.getElementById('filter_creator_id');
+        const dropdown = document.getElementById('creator_results_dropdown');
+        const clearBtn = document.getElementById('clear_creator_btn');
+        let debounceTimer = null;
+
+        if (creatorInput) {
+            creatorInput.addEventListener('keyup', function() {
+                clearTimeout(debounceTimer);
+                const q = this.value.trim();
+                if (q.length < 1) {
+                    dropdown.style.display = 'none';
+                    return;
+                }
+                debounceTimer = setTimeout(() => {
+                    fetch(`{{ route('users.search') }}?q=${encodeURIComponent(q)}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            dropdown.innerHTML = '';
+                            if (data.length === 0) {
+                                dropdown.innerHTML = '<div style="padding: 10px; font-size: 0.82rem; color: var(--text-muted); text-align: center;">No matching officers found</div>';
+                            } else {
+                                data.forEach(item => {
+                                    const div = document.createElement('div');
+                                    div.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f0f0f0; font-size: 0.82rem; transition: background 0.15s ease;';
+                                    div.onmouseover = function() { this.style.backgroundColor = '#f8f9fa'; };
+                                    div.onmouseout = function() { this.style.backgroundColor = 'transparent'; };
+                                    div.innerHTML = `<strong style="color: var(--primary-dark); display: block;">${item.designation}</strong><span style="color: var(--text-muted); font-size: 0.76rem;">(${item.name})</span>`;
+                                    div.addEventListener('click', function() {
+                                        creatorHidden.value = item.id;
+                                        creatorInput.value = `${item.designation} (${item.name})`;
+                                        dropdown.style.display = 'none';
+                                        creatorInput.form.submit();
+                                    });
+                                    dropdown.appendChild(div);
+                                });
+                            }
+                            dropdown.style.display = 'block';
+                        })
+                        .catch(err => console.error(err));
+                }, 250);
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!creatorInput.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.style.display = 'none';
+                }
+            });
+
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    creatorHidden.value = '';
+                    creatorInput.value = '';
+                    creatorInput.form.submit();
+                });
+            }
+        }
+    });
 </script>
 @endsection

@@ -297,12 +297,13 @@
                     @php
                         $isVc = false;
                         if ($comment->user) {
-                            $uName = strtolower($comment->user->name ?? '');
-                            $dCode = strtolower($comment->user->department->code ?? '');
-                            $dName = strtolower($comment->user->department->name ?? '');
-                            $desig = strtolower($comment->user->designation->title ?? '');
+                            $desig = strtolower(trim($comment->user->designation->title ?? ''));
+                            $uName = strtolower(trim($comment->user->name ?? ''));
+                            
+                            $hasVcTitle = ($desig === 'vice chancellor' || $desig === 'vice-chancellor' || $desig === 'vc' || str_starts_with($desig, 'vice chancellor') || str_starts_with($desig, 'vice-chancellor') || $uName === 'vice chancellor' || $uName === 'vc');
+                            $isAssistantOrStaff = (str_contains($desig, 'p.s') || str_contains($desig, 'ps') || str_contains($desig, 'p.a') || str_contains($desig, 'pa ') || str_contains($desig, 'secretary') || str_contains($desig, 'assistant') || str_contains($desig, 'clerk') || str_contains($desig, 'officer'));
 
-                            if ($dCode === 'vco' || str_contains($dName, 'vice chancellor') || str_contains($uName, 'vice chancellor') || str_contains($uName, 'vc ') || $uName === 'vc' || str_contains($desig, 'vice chancellor') || str_contains($desig, 'vc')) {
+                            if ($hasVcTitle && !$isAssistantOrStaff) {
                                 $isVc = true;
                             }
                         }

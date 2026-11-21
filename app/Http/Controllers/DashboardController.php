@@ -24,7 +24,15 @@ class DashboardController extends Controller
             ->whereNotIn('status', ['draft', 'completed'])
             ->count();
 
-        $openFilesCount = $markedToMeCount;
+        $openFilesCount = Document::whereNotIn('status', ['draft', 'completed'])
+            ->where(function($q) use ($user) {
+                $q->where('creator_id', $user->id)
+                  ->orWhere('current_holder_id', $user->id)
+                  ->orWhereHas('tracks', function($t) use ($user) {
+                      $t->where('sender_id', $user->id)->orWhere('receiver_id', $user->id);
+                  });
+            })
+            ->count();
 
         $closedFilesCount = Document::where('status', 'completed')
             ->where(function($q) use ($user) {
@@ -44,10 +52,9 @@ class DashboardController extends Controller
             ->whereNotIn('status', ['draft', 'completed'])
             ->count();
 
-        $unreadNotificationsCount = $user->unreadNotifications()->where('title', 'NOT LIKE', 'Support Query%')->count();
-
         // 2. Fetch Files Requiring User Action (Files Need Your Attention)
-        $heldQuery = Document::where('current_holder_id', $user->id)
+        $heldQuery = Document::with(['creator.designation', 'currentHolder.designation', 'currentDepartment', 'tracks.sender.designation', 'tracks.sender.department'])
+            ->where('current_holder_id', $user->id)
             ->whereNotIn('status', ['draft', 'completed']);
 
         if (!empty($search)) {
@@ -61,11 +68,18 @@ class DashboardController extends Controller
         if (!empty($filter)) {
             if ($filter === 'pending') {
                 $heldQuery->where('status', 'pending');
+            } elseif ($filter === 'forwarded') {
+                $heldQuery->where('status', 'forwarded');
             } elseif ($filter === 'completed') {
                 $heldQuery->where('status', 'completed');
             } elseif (in_array($filter, ['normal', 'urgent', 'most_urgent'])) {
                 $heldQuery->where('priority', $filter);
             }
+        }
+
+        $creatorId = $request->query('creator_id');
+        if (!empty($creatorId)) {
+            $heldQuery->where('creator_id', $creatorId);
         }
 
         $attentionFiles = $heldQuery
@@ -81,6 +95,8 @@ class DashboardController extends Controller
                 ->exists();
         }
 
+        $selectedCreator = !empty($creatorId) ? \App\Models\User::with('designation')->find($creatorId) : null;
+
         return view('dashboard', compact(
             'myFilesCount',
             'openFilesCount',
@@ -88,10 +104,11 @@ class DashboardController extends Controller
             'markedToMeCount',
             'commentsCount',
             'urgentCount',
-            'unreadNotificationsCount',
             'attentionFiles',
             'search',
-            'filter'
+            'filter',
+            'creatorId',
+            'selectedCreator'
         ));
     }
 }

@@ -74,8 +74,25 @@ class NotificationController extends Controller
                 $isRead = true;
             }
 
+            // Extract document reference if present
+            $documentUrl = null;
+            $document = null;
+            if (preg_match('/(?:File Action Required|Copied for Info|File)\s*:?\s*([A-Z0-9\-]+)/i', $notif->title, $m)) {
+                $fileNumber = trim($m[1]);
+                $document = \App\Models\Document::where('file_number', $fileNumber)->first();
+            }
+
+            if (!$document && preg_match('/file\s+"([^"]+)"/i', $notif->message, $m)) {
+                $titlePart = trim($m[1]);
+                $document = \App\Models\Document::where('title', 'like', $titlePart . '%')->first();
+            }
+
+            if ($document) {
+                $documentUrl = route('documents.show', $document->id);
+            }
+
             $feed->push((object)[
-                'type' => 'general',
+                'type' => $documentUrl ? 'file_assignment' : 'general',
                 'id' => $notif->id,
                 'title' => $notif->title,
                 'message' => $notif->message,
@@ -84,7 +101,8 @@ class NotificationController extends Controller
                 'date' => $notif->created_at,
                 'deleted_at' => $notif->deleted_at,
                 'is_read' => $isRead,
-                'link' => route('notifications.read', $notif->id)
+                'document_url' => $documentUrl,
+                'link' => $documentUrl ?? route('notifications.read', $notif->id)
             ]);
         }
 
@@ -147,7 +165,7 @@ class NotificationController extends Controller
         ]);
 
         // 1. File Notifications -> Direct redirect to Document Show Page
-        if (preg_match('/File Action Required:\s*([A-Z0-9\-]+)/i', $notification->title, $matches)) {
+        if (preg_match('/(?:File Action Required|Copied for Info|File)\s*:?\s*([A-Z0-9\-]+)/i', $notification->title, $matches)) {
             $fileNumber = trim($matches[1]);
             $doc = \App\Models\Document::where('file_number', $fileNumber)->first();
             if ($doc) {

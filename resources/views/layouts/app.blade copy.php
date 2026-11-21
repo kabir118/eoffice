@@ -66,7 +66,7 @@
                     <li class="sidebar-item {{ Request::is('documents') && Request::query('tab') == 'all' ? 'active' : '' }}">
                         <a href="{{ route('documents.index', ['tab' => 'all']) }}" class="sidebar-link">
                             <i class="bi bi-folder-fill"></i>
-                            <span>All University Files</span>
+                            <span>Track All University Files</span>
                         </a>
                     </li>
                 @endif

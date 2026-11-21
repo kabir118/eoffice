@@ -45,7 +45,7 @@
                 <textarea name="urgency_remarks" id="urgency_remarks" class="form-control" style="min-height: 80px;" placeholder="Please clarify the justification for classifying this file as urgent/most urgent..."></textarea>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="grid-2-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <!-- Target Department -->
                 <div class="form-group">
                     <label for="department_select" class="form-label">Forward to Department</label>
@@ -68,8 +68,13 @@
 
             <!-- Description -->
             <div class="form-group">
-                <label for="description" class="form-label">Description / Initiator's Detailed Note</label>
-                <textarea name="description" id="description" class="form-control" style="min-height: 150px;" placeholder="Provide details, justification, and reference notes for this file..." required>{{ old('description') }}</textarea>
+                <label for="description" class="form-label">
+                    Description / Initiator's Detailed Note
+                    <span style="float: right; font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">
+                        <span id="desc-counter">0</span> / 2000 characters
+                    </span>
+                </label>
+                <textarea name="description" id="description" class="form-control" style="min-height: 150px;" maxlength="2000" placeholder="Provide details, justification, and reference notes for this file..." required>{{ old('description') }}</textarea>
             </div>
 
             <!-- Attachment -->
@@ -162,5 +167,146 @@
         window.addEventListener('DOMContentLoaded', () => {
             document.getElementById('priority').dispatchEvent(new Event('change'));
         });
+
+        // Dynamic Office / Department Staff Selector for CC
+        const selectedCcUsers = new Map(); // id => { id, name, designation, deptCode }
+
+        function filterCcStaffByDepartment(deptId) {
+            const container = document.getElementById('cc-staff-checklist-container');
+            const checklist = document.getElementById('cc-staff-checklist');
+            const prompt = document.getElementById('cc-staff-prompt');
+            const selectAllBtn = document.getElementById('btn-select-all-dept');
+
+            checklist.innerHTML = '';
+
+            if (!deptId) {
+                container.style.display = 'none';
+                prompt.style.display = 'block';
+                selectAllBtn.style.display = 'none';
+                return;
+            }
+
+            const deptUsers = allUsers.filter(u => u.department_id == deptId);
+
+            if (deptUsers.length === 0) {
+                container.style.display = 'block';
+                prompt.style.display = 'none';
+                selectAllBtn.style.display = 'none';
+                checklist.innerHTML = '<div style="font-size:0.8rem; color:#94a3b8; grid-column: 1/-1;">No staff members found in this office.</div>';
+                return;
+            }
+
+            container.style.display = 'block';
+            prompt.style.display = 'none';
+            selectAllBtn.style.display = 'inline-flex';
+
+            deptUsers.forEach(u => {
+                const desig = u.designation ? u.designation.title : '';
+                const deptCode = u.department ? u.department.code : '';
+                const isChecked = selectedCcUsers.has(u.id);
+
+                const labelText = desig ? `<strong>${escapeHtml(desig)}</strong> (${escapeHtml(u.name)})` : `<strong>${escapeHtml(u.name)}</strong>`;
+
+                const item = document.createElement('label');
+                item.style.cssText = 'font-size: 0.8rem; display: flex; align-items: center; gap: 8px; cursor: pointer; background: white; padding: 6px 10px; border-radius: 5px; border: 1px solid #cbd5e1;';
+                item.innerHTML = `
+                    <input type="checkbox" value="${u.id}" ${isChecked ? 'checked' : ''} onchange="toggleCcUser(${u.id}, '${escapeHtml(u.name)}', '${escapeHtml(desig)}', '${escapeHtml(deptCode)}', this.checked)">
+                    <span>${labelText}</span>
+                `;
+                checklist.appendChild(item);
+            });
+        }
+
+        function toggleCcUser(id, name, designation, deptCode, isChecked) {
+            if (isChecked) {
+                selectedCcUsers.set(id, { id, name, designation, deptCode });
+            } else {
+                selectedCcUsers.delete(id);
+            }
+            renderCcBadges();
+        }
+
+        function selectAllCcStaffInDept() {
+            const deptId = document.getElementById('cc_department_select').value;
+            if (!deptId) return;
+
+            const deptUsers = allUsers.filter(u => u.department_id == deptId);
+            deptUsers.forEach(u => {
+                const desig = u.designation ? u.designation.title : '';
+                const deptCode = u.department ? u.department.code : '';
+                selectedCcUsers.set(u.id, { id: u.id, name: u.name, designation: desig, deptCode: deptCode });
+            });
+
+            filterCcStaffByDepartment(deptId);
+            renderCcBadges();
+        }
+
+        function removeCcUser(id) {
+            selectedCcUsers.delete(id);
+            const activeDeptId = document.getElementById('cc_department_select').value;
+            if (activeDeptId) {
+                filterCcStaffByDepartment(activeDeptId);
+            }
+            renderCcBadges();
+        }
+
+        function clearAllCcRecipients() {
+            selectedCcUsers.clear();
+            const activeDeptId = document.getElementById('cc_department_select').value;
+            if (activeDeptId) {
+                filterCcStaffByDepartment(activeDeptId);
+            }
+            renderCcBadges();
+        }
+
+        function renderCcBadges() {
+            const badgesContainer = document.getElementById('cc-selected-badges');
+            const hiddenInputs = document.getElementById('cc-hidden-inputs');
+            const countSpan = document.getElementById('cc-selected-count');
+
+            badgesContainer.innerHTML = '';
+            hiddenInputs.innerHTML = '';
+            countSpan.textContent = selectedCcUsers.size;
+
+            if (selectedCcUsers.size === 0) {
+                badgesContainer.innerHTML = '<span id="cc-empty-badge-msg" style="font-size: 0.78rem; color: #94a3b8; font-style: italic;">No individual staff members added yet.</span>';
+                return;
+            }
+
+            selectedCcUsers.forEach(user => {
+                const badgeText = user.designation ? `<strong>${escapeHtml(user.designation)}</strong> (${escapeHtml(user.name)})` : `<strong>${escapeHtml(user.name)}</strong>`;
+                const badge = document.createElement('span');
+                badge.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; background-color: #f1f5f9; border: 1px solid #cbd5e1; color: #1e293b; font-size: 0.78rem; padding: 4px 10px; border-radius: 20px;';
+                badge.innerHTML = `
+                    <span>${badgeText}</span>
+                    <i class="bi bi-x-circle-fill" onclick="removeCcUser(${user.id})" style="cursor: pointer; color: #ef4444; font-size: 0.85rem;" title="Remove"></i>
+                `;
+                badgesContainer.appendChild(badge);
+
+                const hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'cc_users[]';
+                hidden.value = user.id;
+                hiddenInputs.appendChild(hidden);
+            });
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        // Description character counter
+        const descTextarea = document.getElementById('description');
+        const descCounter  = document.getElementById('desc-counter');
+        if (descTextarea && descCounter) {
+            const updateCounter = () => {
+                const len = descTextarea.value.length;
+                descCounter.textContent = len;
+                descCounter.style.color = len > 1800 ? '#e74c3c' : len > 1500 ? '#e67e22' : 'var(--text-muted)';
+            };
+            descTextarea.addEventListener('input', updateCounter);
+            updateCounter();
+        }
+
     </script>
 @endsection

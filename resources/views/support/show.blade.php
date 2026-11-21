@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Ticket Details - USTB e-Office')
-@section('page_title', 'Support Ticket Conversation')
+@section('title', 'Suggestion / Issue Details - USTB e-Office')
+@section('page_title', 'Suggestion / Issue Conversation')
 
 @section('styles')
 <style>

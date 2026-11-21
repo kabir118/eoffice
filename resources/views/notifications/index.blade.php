@@ -56,17 +56,17 @@
                                 </div>
                                 
                                 <div style="display: flex; align-items: center; gap: 6px;">
-                                    @if($item->type === 'file_assignment')
-                                        <a href="{{ $item->link }}" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 0.7rem; background-color: var(--primary-dark);">
+                                    @if(!empty($item->document_url))
+                                        <a href="{{ $item->document_url }}" class="btn btn-primary btn-sm" style="padding: 4px 10px; font-size: 0.72rem; background-color: var(--primary-dark); display: inline-flex; align-items: center; gap: 4px;">
                                             <i class="bi bi-folder2-open"></i>
                                             <span>Open File</span>
                                         </a>
-                                    @else
-                                        <button onclick="viewNotification({{ json_encode($item) }})" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 0.7rem;">
-                                            <i class="bi bi-envelope-open"></i>
-                                            <span>Open</span>
-                                        </button>
                                     @endif
+                                    
+                                    <button onclick="viewNotification({{ json_encode($item) }})" class="btn {{ !empty($item->document_url) ? 'btn-secondary' : 'btn-primary' }} btn-sm" style="padding: 4px 8px; font-size: 0.72rem;">
+                                        <i class="bi bi-envelope-open"></i>
+                                        <span>{{ !empty($item->document_url) ? 'Details' : 'Open' }}</span>
+                                    </button>
 
                                     @if(($tab ?? 'active') === 'active')
                                         @if(Auth::user()->isSuperAdmin() || Auth::user()->canComposeNotification())
@@ -190,10 +190,14 @@
                     <span id="notif_modal_date"></span>
                 </div>
             </div>
-            <div class="modal-footer">
-                <form id="notif_modal_form" method="POST">
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; align-items: center;">
+                <a id="notif_modal_file_btn" href="#" class="btn btn-primary" style="display: none; text-decoration: none; align-items: center; gap: 6px; background-color: var(--primary-dark);">
+                    <i class="bi bi-folder2-open"></i>
+                    <span>Open Relevant File</span>
+                </a>
+                <form id="notif_modal_form" method="POST" style="margin: 0;">
                     @csrf
-                    <button type="submit" id="notif_modal_btn" class="btn btn-primary">Mark Read & Close</button>
+                    <button type="submit" id="notif_modal_btn" class="btn btn-secondary">Mark Read & Close</button>
                 </form>
                 <button type="button" id="notif_modal_close_btn" onclick="closeNotifModal()" class="btn btn-secondary" style="display: none;">Close</button>
             </div>
@@ -221,6 +225,14 @@
             
             const form = document.getElementById('notif_modal_form');
             const closeBtn = document.getElementById('notif_modal_close_btn');
+            const fileBtn = document.getElementById('notif_modal_file_btn');
+
+            if (item.document_url) {
+                fileBtn.href = item.document_url;
+                fileBtn.style.display = 'inline-flex';
+            } else {
+                fileBtn.style.display = 'none';
+            }
             
             if (!item.is_read) {
                 form.action = `{{ url('/notifications') }}/${item.id}/read`;

@@ -9,36 +9,38 @@
     @include('partials.stats_cards')
 
     <!-- Header Row -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+    <div style="margin-bottom: 20px;">
         <p style="color: var(--text-muted); font-size: 0.88rem; margin: 0;">
             <i class="bi bi-info-circle"></i> Active open files initiated and created by you.
         </p>
-
-        <a href="{{ route('documents.create') }}" class="btn btn-primary">
-            <i class="bi bi-file-earmark-plus"></i>
-            <span>Initiate File</span>
-        </a>
     </div>
 
     <!-- Search Bar & Filter Row -->
     <div style="margin-bottom: 25px;">
-        <form action="{{ route('documents.myFiles') }}" method="GET" style="display: flex; gap: 10px; max-width: 780px; flex-wrap: wrap; align-items: center;">
+        <form action="{{ route('documents.myFiles') }}" method="GET" class="search-filter-form" style="display: flex; gap: 10px; max-width: 750px; flex-wrap: wrap; align-items: center;">
+            <input type="hidden" name="status" value="{{ $status }}">
             <div style="position: relative; flex-grow: 1; min-width: 240px;">
                 <i class="bi bi-search" style="position: absolute; left: 14px; top: 12px; color: var(--text-muted);"></i>
                 <input type="text" name="search" class="form-control" style="padding-left: 40px;" placeholder="Search files by ID, Subject, Description..." value="{{ $search ?? '' }}">
             </div>
 
-            <select name="filter" class="form-control" onchange="this.form.submit()" style="width: auto; min-width: 175px; cursor: pointer; font-weight: 600; color: var(--primary-dark);">
-                <option value="">-- All Files --</option>
-                <option value="pending" {{ ($filter ?? '') === 'pending' ? 'selected' : '' }}>⌛ Pending Files</option>
-                <option value="normal" {{ ($filter ?? '') === 'normal' ? 'selected' : '' }}>🟢 Normal Priority</option>
-                <option value="urgent" {{ ($filter ?? '') === 'urgent' ? 'selected' : '' }}>🟠 Urgent Priority</option>
-                <option value="most_urgent" {{ ($filter ?? '') === 'most_urgent' ? 'selected' : '' }}>🔴 Most Urgent Priority</option>
+            <select name="filter" class="form-control" onchange="this.form.submit()" style="width: auto; min-width: 190px; cursor: pointer; font-weight: 600; color: var(--primary-dark);">
+                <option value="">-- All Filter Options --</option>
+                <optgroup label="File Status">
+                    <option value="forwarded" {{ ($filter ?? '') === 'forwarded' ? 'selected' : '' }}>📤 Forwarded</option>
+                    <option value="pending" {{ ($filter ?? '') === 'pending' ? 'selected' : '' }}>⌛ Pending</option>
+                    <option value="completed" {{ ($filter ?? '') === 'completed' ? 'selected' : '' }}>✅ Completed</option>
+                </optgroup>
+                <optgroup label="Priority Level">
+                    <option value="normal" {{ ($filter ?? '') === 'normal' ? 'selected' : '' }}>🟢 Normal Priority</option>
+                    <option value="urgent" {{ ($filter ?? '') === 'urgent' ? 'selected' : '' }}>🟠 Urgent Priority</option>
+                    <option value="most_urgent" {{ ($filter ?? '') === 'most_urgent' ? 'selected' : '' }}>🔴 Most Urgent Priority</option>
+                </optgroup>
             </select>
 
             <button type="submit" class="btn btn-primary">Search</button>
             @if(!empty($search) || !empty($filter))
-                <a href="{{ route('documents.myFiles') }}" class="btn btn-secondary" title="Clear Search & Filter">
+                <a href="{{ route('documents.myFiles', ['status' => $status]) }}" class="btn btn-secondary" title="Clear Search & Filter">
                     <i class="bi bi-x-lg"></i> Clear
                 </a>
             @endif
@@ -75,6 +77,7 @@
                                 <th>File Tracking ID</th>
                                 <th>Title</th>
                                 <th>Initiated On</th>
+                                <th>Initiated By</th>
                                 <th>Current Holder</th>
                                 <th>Last Activity</th>
                                 <th>Priority</th>
@@ -90,11 +93,28 @@
                                     <td style="font-weight: 600; color: var(--primary-color);">{{ $doc->file_number }}</td>
                                     <td>
                                         <div style="display: flex; flex-direction: column;">
-                                            <span style="color: var(--primary-dark); font-weight: 500;">{{ Str::limit($doc->title, 40) }}</span>
+                                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                <span style="color: var(--primary-dark); font-weight: 600;">{{ Str::limit($doc->title, 40) }}</span>
+                                                @if($doc->status === 'completed')
+                                                    <span class="badge badge-status-completed" style="font-size: 0.65rem; padding: 2px 6px;">Closed</span>
+                                                @elseif($doc->status === 'assigned_back')
+                                                    <span class="badge badge-status-assigned_back" style="font-size: 0.65rem; padding: 2px 6px;">Assigned Back</span>
+                                                @elseif($doc->status === 'draft')
+                                                    <span class="badge" style="background-color: #95a5a6; color: white; font-size: 0.65rem; padding: 2px 6px;">Draft</span>
+                                                @endif
+                                            </div>
                                             <span style="font-size: 0.75rem; color: var(--text-muted);">{{ Str::limit($doc->description, 50) }}</span>
                                         </div>
                                     </td>
                                     <td style="font-size: 0.85rem; color: #2c3e50; font-weight: 600;">{{ $doc->created_at->format('M d, Y') }}</td>
+                                    <td>
+                                        @if($doc->creator && $doc->creator->designation)
+                                            <strong style="color: var(--primary-dark); display: block;">{{ $doc->creator->designation->title }}</strong>
+                                            <span style="font-size: 0.74rem; color: var(--text-muted); display: block;">({{ $doc->creator->name }})</span>
+                                        @else
+                                            <strong style="color: var(--primary-dark); display: block;">{{ $doc->creator ? $doc->creator->name : 'N/A' }}</strong>
+                                        @endif
+                                    </td>
                                     <td>
                                         <span style="font-weight: 500; display: block;">{{ $doc->currentHolder ? $doc->currentHolder->name : 'N/A' }}</span>
                                         <span style="font-size: 0.73rem; color: var(--text-muted); display: block;">
@@ -113,10 +133,29 @@
                                         @endif
                                     </td>
                                     <td>
-                                        <a href="{{ route('documents.show', $doc->id) }}" class="btn btn-primary btn-sm" style="padding: 6px 10px;">
-                                            <i class="bi bi-folder2-open"></i>
-                                            <span>Open</span>
-                                        </a>
+                                        @php
+                                            $isWithMe = $doc->current_holder_id === Auth::id();
+                                        @endphp
+                                        <div style="display: flex; flex-direction: column; gap: 5px; align-items: flex-start;">
+                                            @if($doc->status === 'completed')
+                                                <span class="badge badge-status-approved" style="font-size: 0.72rem;">Closed</span>
+                                            @elseif($isWithMe)
+                                                <span class="badge" style="background-color: rgba(39,174,96,0.12); color: #1e8449; font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 20px;">
+                                                    <i class="bi bi-person-check-fill"></i> With You
+                                                </span>
+                                            @else
+                                                <span class="badge" style="background-color: rgba(231,76,60,0.1); color: #c0392b; font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 20px;">
+                                                    <i class="bi bi-arrow-right-circle-fill"></i> In Transit
+                                                </span>
+                                                <div style="font-size: 0.7rem; color: var(--text-muted);">
+                                                    {{ $doc->currentHolder ? ($doc->currentHolder->designation ? $doc->currentHolder->designation->title : $doc->currentHolder->name) : '—' }}
+                                                </div>
+                                            @endif
+                                            <a href="{{ route('documents.show', $doc->id) }}" class="btn btn-primary btn-sm" style="padding: 4px 10px; margin-top: 4px; font-size: 0.78rem;">
+                                                <i class="bi bi-folder2-open"></i>
+                                                <span>Open</span>
+                                            </a>
+                                        </div>
                                     </td>
                                 </tr>
                             @endforeach

@@ -32,57 +32,28 @@
                         <span>Dashboard</span>
                     </a>
                 </li>
-                <li class="sidebar-item sidebar-has-submenu">
-                    <a href="{{ route('documents.myFiles') }}" class="sidebar-link sidebar-toggle" onclick="toggleSubmenu(event, this)">
-                        <i class="bi bi-folder-symlink"></i>
-                        <span>Files Created</span>
-                        <i class="bi bi-chevron-down submenu-arrow"></i>
-                    </a>
-                    <ul class="sidebar-submenu">
-                        <li class="sidebar-subitem {{ Request::is('my-files') ? 'active' : '' }}">
-                            <a href="{{ route('documents.myFiles') }}" class="sidebar-sublink">
-                                <i class="bi bi-file-earmark-text"></i>
-                                <span>Files Created</span>
-                            </a>
-                        </li>
-                        <li class="sidebar-subitem {{ Request::is('documents') && Request::query('tab') != 'outbox' && Request::query('tab') != 'forwarded' && Request::query('tab') != 'completed' && Request::query('tab') != 'open' && Request::query('tab') != 'all' ? 'active' : '' }}">
-                            <a href="{{ route('documents.index', ['tab' => 'inbox']) }}" class="sidebar-sublink">
-                                <i class="bi bi-person-badge"></i>
-                                <span>Marked to Me</span>
-                            </a>
-                        </li>
-                        <li class="sidebar-subitem {{ Request::is('documents') && Request::query('tab') == 'completed' ? 'active' : '' }}">
-                            <a href="{{ route('documents.index', ['tab' => 'completed']) }}" class="sidebar-sublink">
-                                <i class="bi bi-check2-all"></i>
-                                <span>Closed Files</span>
-                            </a>
-                        </li>
-                        <li class="sidebar-subitem {{ Request::is('documents') && Request::query('tab') == 'open' ? 'active' : '' }}">
-                            <a href="{{ route('documents.index', ['tab' => 'open']) }}" class="sidebar-sublink">
-                                <i class="bi bi-folder2-open"></i>
-                                <span>Open Files</span>
-                            </a>
-                        </li>
-                        <li class="sidebar-subitem {{ Request::is('my-remarks') ? 'active' : '' }}">
-                            <a href="{{ route('documents.myRemarks') }}" class="sidebar-sublink">
-                                <i class="bi bi-chat-left-text"></i>
-                                <span>My Comments Log</span>
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                @if(Auth::user()->canViewAllFiles())
-                    <li class="sidebar-item {{ Request::is('documents') && Request::query('tab') == 'all' ? 'active' : '' }}">
-                        <a href="{{ route('documents.index', ['tab' => 'all']) }}" class="sidebar-link">
-                            <i class="bi bi-folder-fill"></i>
-                            <span>All University Files</span>
-                        </a>
-                    </li>
-                @endif
                 <li class="sidebar-item {{ Request::is('documents/create') ? 'active' : '' }}">
                     <a href="{{ route('documents.create') }}" class="sidebar-link">
                         <i class="bi bi-file-earmark-plus"></i>
-                        <span>Initiate File</span>
+                        <span>Create File</span>
+                    </a>
+                </li>
+                <li class="sidebar-item {{ Request::is('my-files') ? 'active' : '' }}">
+                    <a href="{{ route('documents.myFiles') }}" class="sidebar-link">
+                        <i class="bi bi-folder-symlink"></i>
+                        <span>Files Created</span>
+                    </a>
+                </li>
+                <li class="sidebar-item {{ Request::is('documents') && !Request::query('tab') || Request::query('tab') === 'inbox' ? 'active' : '' }}">
+                    <a href="{{ route('documents.index', ['tab' => 'inbox']) }}" class="sidebar-link">
+                        <i class="bi bi-person-badge"></i>
+                        <span>Marked to Me</span>
+                    </a>
+                </li>
+                <li class="sidebar-item {{ Request::is('documents') && Request::query('tab') == 'completed' ? 'active' : '' }}">
+                    <a href="{{ route('documents.index', ['tab' => 'completed']) }}" class="sidebar-link">
+                        <i class="bi bi-check2-all"></i>
+                        <span>Closed Files</span>
                     </a>
                 </li>
                 <li class="sidebar-item {{ Request::is('my-remarks') ? 'active' : '' }}">
@@ -91,16 +62,18 @@
                         <span>My Comments Log</span>
                     </a>
                 </li>
-                <li class="sidebar-item {{ Request::is('notifications') ? 'active' : '' }}">
-                    <a href="{{ route('notifications.index') }}" class="sidebar-link">
-                        <i class="bi bi-bell"></i>
-                        <span>Notification Center</span>
-                    </a>
-                </li>
-                <li class="sidebar-item {{ Request::is('support*') ? 'active' : '' }}">
-                    <a href="{{ route('support.index') }}" class="sidebar-link">
-                        <i class="bi bi-ticket-detailed"></i>
-                        <span>Support Tickets</span>
+                @if(Auth::user()->canViewAllFiles())
+                    <li class="sidebar-item {{ Request::is('documents') && Request::query('tab') == 'all' ? 'active' : '' }}">
+                        <a href="{{ route('documents.index', ['tab' => 'all']) }}" class="sidebar-link">
+                            <i class="bi bi-folder-fill"></i>
+                            <span>Track All University Files</span>
+                        </a>
+                    </li>
+                @endif
+                <li class="sidebar-item">
+                    <a href="#" onclick="openSupportModal(event)" class="sidebar-link">
+                        <i class="bi bi-envelope-paper"></i>
+                        <span>Suggestions / Issues</span>
                     </a>
                 </li>
                 @if(Auth::user()->isSuperAdmin())
@@ -120,6 +93,18 @@
                         <a href="{{ route('users.index') }}" class="sidebar-link">
                             <i class="bi bi-people"></i>
                             <span>User Accounts</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item {{ Request::is('documents') && Request::query('tab') == 'trash' ? 'active' : '' }}">
+                        <a href="{{ route('documents.index', ['tab' => 'trash']) }}" class="sidebar-link">
+                            <i class="bi bi-file-earmark-x"></i>
+                            <span>Archived Files</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item {{ Request::is('archives/comments*') ? 'active' : '' }}">
+                        <a href="{{ route('archives.comments') }}" class="sidebar-link">
+                            <i class="bi bi-chat-square-quote"></i>
+                            <span>Archived Remarks</span>
                         </a>
                     </li>
                 @endif
@@ -147,71 +132,6 @@
                     <h2>@yield('page_title', 'Dashboard')</h2>
                 </div>
                 <div class="top-header-actions">
-                    <!-- Notification Bell & Dropdown -->
-                    @php
-                        $unreadNotifications = Auth::user() ? Auth::user()->unreadNotifications()->latest()->take(5)->get() : collect();
-                        $unreadNotifCount = Auth::user() ? Auth::user()->unreadNotifications()->count() : 0;
-                    @endphp
-                    <div class="notification-dropdown-wrapper" style="position: relative; display: inline-block; margin-right: 15px;">
-                        <button onclick="toggleNotificationDropdown(event)" class="notification-bell-btn" style="background: none; border: none; cursor: pointer; position: relative; padding: 5px;">
-                            <i class="bi bi-bell" style="font-size: 1.25rem; color: var(--primary-dark);"></i>
-                            @if($unreadNotifCount > 0)
-                                <span class="bell-badge" style="position: absolute; top: -2px; right: -2px; background-color: var(--priority-most-urgent); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid var(--white);">
-                                    {{ $unreadNotifCount }}
-                                </span>
-                            @endif
-                        </button>
-                        
-                        <!-- Dropdown Menu Card -->
-                        <div id="notificationDropdownMenu" class="dropdown-menu-card" style="display: none; position: absolute; right: 0; top: 38px; width: 330px; background-color: var(--white); border: 1px solid var(--border-color); border-radius: var(--border-radius); box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 1000; padding: 10px 0;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 1px solid var(--border-color);">
-                                <span style="font-weight: 600; font-size: 0.85rem; color: var(--primary-dark);"><i class="bi bi-bell-fill"></i> e-Notifications</span>
-                                @if($unreadNotifCount > 0)
-                                    <form action="{{ route('notifications.readAll') }}" method="POST" style="margin: 0;">
-                                        @csrf
-                                        <button type="submit" style="background: none; border: none; color: var(--primary-color); font-size: 0.75rem; cursor: pointer; font-weight: 600; padding: 0;">Mark all read</button>
-                                    </form>
-                                @endif
-                            </div>
-                            
-                            <div style="max-height: 250px; overflow-y: auto;">
-                                @if($unreadNotifications->count() > 0)
-                                    @foreach($unreadNotifications as $notif)
-                                        <form action="{{ route('notifications.read', $notif->id) }}" method="POST" style="margin: 0;">
-                                            @csrf
-                                            <button type="submit" style="display: block; width: 100%; text-align: left; background: none; border: none; padding: 12px 15px; border-bottom: 1px solid var(--bg-color); cursor: pointer; transition: background-color 0.2s; font-family: inherit;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='transparent'">
-                                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
-                                                    <span style="font-weight: 600; font-size: 0.8rem; color: var(--primary-dark); line-height: 1.2;">{{ $notif->title }}</span>
-                                                    <span style="font-size: 0.65rem; color: var(--text-muted); white-space: nowrap;">{{ $notif->created_at->diffForHumans(null, true) }}</span>
-                                                </div>
-                                                <p style="font-size: 0.75rem; color: var(--text-muted); margin: 4px 0; line-height: 1.3;">{{ Str::limit($notif->message, 70) }}</p>
-                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-                                                    <span style="font-size: 0.68rem; color: var(--primary-color); font-weight: 500;">
-                                                        <i class="bi bi-person"></i> {{ $notif->sender ? $notif->sender->name : 'System' }}
-                                                    </span>
-                                                    <span style="font-size: 0.68rem; color: var(--accent-color); font-weight: 700;">
-                                                        View &raquo;
-                                                    </span>
-                                                </div>
-                                            </button>
-                                        </form>
-                                    @endforeach
-                                @else
-                                    <div style="text-align: center; padding: 25px 15px; color: var(--text-muted);">
-                                        <i class="bi bi-bell-slash" style="font-size: 1.5rem; display: block; margin-bottom: 8px; color: var(--border-color);"></i>
-                                        <p style="font-size: 0.78rem; margin: 0;">No unread notifications.</p>
-                                    </div>
-                                @endif
-                            </div>
-                            
-                            <div style="text-align: center; padding: 8px 15px 0 15px; border-top: 1px solid var(--border-color); margin-top: 5px;">
-                                <a href="{{ route('notifications.index') }}" style="font-size: 0.8rem; color: var(--primary-color); text-decoration: none; font-weight: 600; display: block; padding: 5px 0;">
-                                    View Notification Center
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- User Profile Card -->
                     <div class="user-profile-menu">
                         <div class="user-avatar">
@@ -274,24 +194,49 @@
         </main>
     </div>
 
-    <!-- Support Modal Overlay -->
+    <!-- Suggestions / Issues Modal — sends email to admin -->
     <div id="supportModal" class="modal-overlay">
-        <div class="modal-card">
+        <div class="modal-card" style="max-width: 540px;">
             <div class="modal-header">
-                <h4>Contact Super Admin</h4>
+                <h4><i class="bi bi-envelope-paper" style="color: var(--primary-color); margin-right: 6px;"></i> Suggestions / Issues</h4>
                 <button onclick="closeSupportModal()" class="modal-close"><i class="bi bi-x-lg"></i></button>
             </div>
-            
-            <form action="{{ route('contact.admin') }}" method="POST">
+
+            <form action="{{ route('suggestions.send') }}" method="POST">
                 @csrf
+
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px; line-height: 1.6;">
+                    Please describe your suggestion or issue clearly and it will be forwarded accordingly.
+                </p>
+
                 <div class="form-group">
-                    <label for="support_message" class="form-label">Describe Your Query / Inquiry</label>
-                    <textarea name="message" id="support_message" class="form-control" style="min-height: 120px;" placeholder="Type your question or support request here..." required></textarea>
+                    <label for="suggestion_subject" class="form-label">
+                        Subject
+                        <span style="float: right; font-size: 0.72rem; color: var(--text-muted); font-weight: 400;">
+                            <span id="sug-subject-counter">0</span> / 120
+                        </span>
+                    </label>
+                    <input type="text" name="subject" id="suggestion_subject" class="form-control" maxlength="120"
+                        placeholder="e.g. File routing delay or Dashboard access issue" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="suggestion_message" class="form-label">
+                        Your Message
+                        <span style="float: right; font-size: 0.72rem; color: var(--text-muted); font-weight: 400;">
+                            <span id="sug-msg-counter">0</span> / 3000
+                        </span>
+                    </label>
+                    <textarea name="message" id="suggestion_message" class="form-control" style="min-height: 140px;" maxlength="3000"
+                        placeholder="Describe your suggestion or issue in detail..." required></textarea>
                 </div>
 
                 <div class="modal-footer">
                     <button type="button" onclick="closeSupportModal()" class="btn btn-secondary">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Send Query</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-send-fill"></i>
+                        <span>Send Message</span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -307,24 +252,26 @@
             document.getElementById('supportModal').classList.remove('active');
         }
 
-        function toggleNotificationDropdown(event) {
-            event.stopPropagation();
-            const menu = document.getElementById('notificationDropdownMenu');
-            if (menu.style.display === 'none' || menu.style.display === '') {
-                menu.style.display = 'block';
-            } else {
-                menu.style.display = 'none';
+        // Live counters for suggestion modal fields
+        document.addEventListener('DOMContentLoaded', function() {
+            const subjInput = document.getElementById('suggestion_subject');
+            const subjCounter = document.getElementById('sug-subject-counter');
+            if (subjInput && subjCounter) {
+                subjInput.addEventListener('input', function() {
+                    const len = this.value.length;
+                    subjCounter.textContent = len;
+                    subjCounter.style.color = len > 100 ? '#e74c3c' : len > 80 ? '#e67e22' : 'var(--text-muted)';
+                });
             }
-        }
 
-        // Close dropdown when clicking outside
-        window.addEventListener('click', function(event) {
-            const menu = document.getElementById('notificationDropdownMenu');
-            if (menu && menu.style.display === 'block') {
-                const isClickInside = menu.contains(event.target) || event.target.closest('.notification-bell-btn');
-                if (!isClickInside) {
-                    menu.style.display = 'none';
-                }
+            const msgInput = document.getElementById('suggestion_message');
+            const msgCounter = document.getElementById('sug-msg-counter');
+            if (msgInput && msgCounter) {
+                msgInput.addEventListener('input', function() {
+                    const len = this.value.length;
+                    msgCounter.textContent = len;
+                    msgCounter.style.color = len > 2700 ? '#e74c3c' : len > 2000 ? '#e67e22' : 'var(--text-muted)';
+                });
             }
         });
 

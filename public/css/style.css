@@ -1173,7 +1173,8 @@ nav[role="navigation"] span[aria-current="page"] span.relative {
 }
 
 @media (max-width: 576px) {
-    .stats-grid {
+    .stats-grid,
+    .grid-2-col {
         grid-template-columns: 1fr !important;
         gap: 12px !important;
     }
@@ -1203,4 +1204,79 @@ nav[role="navigation"] span[aria-current="page"] span.relative {
         right: -60px !important;
     }
 }
+
+/* ===== Universal Mobile Form & Scrolling Responsiveness ===== */
+.table-responsive {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    margin-bottom: 15px;
+}
+
+.table-responsive::-webkit-scrollbar {
+    height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+    .search-filter-form {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        width: 100% !important;
+        gap: 10px !important;
+    }
+
+    .search-filter-form > div,
+    .search-filter-form > select,
+    .search-filter-form > button,
+    .search-filter-form > a {
+        width: 100% !important;
+        min-width: 100% !important;
+    }
+
+    .modal-overlay {
+        padding: 12px !important;
+        align-items: flex-start !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .modal-card {
+        padding: 20px !important;
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        margin-top: 20px !important;
+    }
+
+    .card-title {
+        flex-wrap: wrap !important;
+        gap: 10px !important;
+    }
+
+    .card-title > div {
+        flex-wrap: wrap !important;
+        width: 100% !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .notification-dropdown-wrapper #notificationDropdownMenu {
+        width: calc(100vw - 32px) !important;
+        max-width: 310px !important;
+        right: -45px !important;
+    }
+
+    .top-header {
+        padding: 0 10px !important;
+    }
+
+    .content-body {
+        padding: 10px !important;
+    }
+}
+
 

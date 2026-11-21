@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Support Tickets - USTB e-Office')
-@section('page_title', 'Support Ticket Center')
+@section('title', 'Suggestions / Issues - USTB e-Office')
+@section('page_title', 'Suggestions / Issues Center')
 
 @section('styles')
 <style>
@@ -422,7 +422,7 @@
 <div id="createTicketModal" class="modal-overlay">
     <div class="modal-card">
         <div class="modal-header">
-            <h4>Submit Support Ticket</h4>
+            <h4>Submit Suggestion / Issue</h4>
             <button onclick="closeCreateModal()" class="modal-close"><i class="bi bi-x-lg"></i></button>
         </div>
         
@@ -431,19 +431,24 @@
             
             <!-- Added Subject input field -->
             <div class="form-group" style="margin-bottom: 15px;">
-                <label for="subject" class="form-label">Subject / Title</label>
-                <input type="text" name="subject" id="subject" class="form-control" placeholder="e.g. Dashboard access issue or File Routing delay" required>
+                <label for="subject" class="form-label">
+                    Subject / Title
+                    <span style="float: right; font-size: 0.75rem; color: var(--text-muted); font-weight: 400;" id="subject-counter-wrap">
+                        <span id="subject-counter">0</span> / 120
+                    </span>
+                </label>
+                <input type="text" name="subject" id="subject" class="form-control" maxlength="120" placeholder="e.g. Dashboard access issue or File Routing delay" required>
             </div>
 
             <div class="form-group">
-                <label for="message" class="form-label">Describe Your Query / Inquiry</label>
+                <label for="message" class="form-label">Describe Your Suggestion / Issue</label>
                 <p style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 10px;">Please be specific. Cite file tracking IDs if your query relates to active documents.</p>
-                <textarea name="message" id="message" class="form-control" style="min-height: 150px;" placeholder="Type your support request details here..." required></textarea>
+                <textarea name="message" id="message" class="form-control" style="min-height: 150px;" placeholder="Type your suggestion or issue details here..." required></textarea>
             </div>
 
             <div class="modal-footer">
                 <button type="button" onclick="closeCreateModal()" class="btn btn-secondary">Cancel</button>
-                <button type="submit" class="btn btn-primary">Submit Ticket</button>
+                <button type="submit" class="btn btn-primary">Submit Suggestion / Issue</button>
             </div>
         </form>
     </div>
@@ -508,5 +513,18 @@
             form.submit();
         }
     }
+
+    // Subject character counter (live feedback in ticket modal)
+    document.addEventListener('DOMContentLoaded', function() {
+        const subjectInput = document.getElementById('subject');
+        const subjectCounter = document.getElementById('subject-counter');
+        if (subjectInput && subjectCounter) {
+            subjectInput.addEventListener('input', function() {
+                const len = this.value.length;
+                subjectCounter.textContent = len;
+                subjectCounter.style.color = len > 100 ? '#e74c3c' : len > 80 ? '#e67e22' : 'var(--text-muted)';
+            });
+        }
+    });
 </script>
 @endsection

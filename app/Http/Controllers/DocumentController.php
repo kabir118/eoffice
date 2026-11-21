@@ -10,6 +10,7 @@ use App\Models\Comment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class DocumentController extends Controller
 {
@@ -23,18 +24,29 @@ class DocumentController extends Controller
         $search = $request->query('search');
         $filter = $request->query('filter');
 
-        if ($filter === 'completed' || $filter === 'closed') {
-            $tab = 'completed';
-        } elseif ($filter === 'open') {
-            $tab = 'open';
+        $creatorId = $request->query('creator_id');
+
+        if (!$request->has('tab')) {
+            if ($filter === 'completed' || $filter === 'closed') {
+                $tab = 'completed';
+            } elseif ($filter === 'open') {
+                $tab = 'open';
+            }
         }
 
         $query = Document::with(['creator.designation', 'currentHolder.designation', 'currentDepartment', 'tracks.sender.designation', 'tracks.sender.department']);
+
+        // Apply creator filter if selected
+        if (!empty($creatorId)) {
+            $query->where('creator_id', $creatorId);
+        }
 
         // Apply runtime priority or status filter if selected
         if (!empty($filter)) {
             if ($filter === 'pending') {
                 $query->where('status', 'pending');
+            } elseif ($filter === 'forwarded') {
+                $query->where('status', 'forwarded');
             } elseif ($filter === 'completed') {
                 $query->where('status', 'completed');
             } elseif (in_array($filter, ['normal', 'urgent', 'most_urgent'])) {
@@ -139,6 +151,19 @@ class DocumentController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->paginate(10)
                 ->withQueryString();
+        } elseif ($tab === 'cc') {
+            // Copied to Me (CC): Files CC'd to this user for information ONLY.
+            // Excludes files where user is current holder (Marked to Me), creator, or completed files (Closed Files)
+            $documents = $query->whereHas('ccUsers', function($q) use ($user) {
+                $q->where('user_id', $user->id);
+            })
+            ->where('current_holder_id', '!=', $user->id)
+            ->where('creator_id', '!=', $user->id)
+            ->whereNotIn('status', ['draft', 'completed'])
+            ->orderByRaw("CASE priority WHEN 'most_urgent' THEN 1 WHEN 'urgent' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END ASC")
+            ->orderBy('created_at', 'desc')
+            ->paginate(10)
+            ->withQueryString();
         } elseif ($tab === 'trash') {
             if (!$user->isSuperAdmin()) {
                 abort(403, 'Unauthorized access.');
@@ -163,7 +188,45 @@ class DocumentController extends Controller
                 ->update(['received_at' => now()]);
         }
 
-        return view('documents.index', compact('documents', 'tab', 'search', 'filter'));
+        $selectedCreator = !empty($creatorId) ? User::with('designation')->find($creatorId) : null;
+
+        return view('documents.index', compact('documents', 'tab', 'search', 'filter', 'creatorId', 'selectedCreator'));
+    }
+
+    /**
+     * AJAX endpoint to search officers by name or designation in real-time.
+     */
+    public function searchUsers(Request $request)
+    {
+        $q = trim($request->query('q', ''));
+        if (empty($q)) {
+            return response()->json([]);
+        }
+
+        $users = User::with(['designation', 'department'])
+            ->where(function($query) use ($q) {
+                $query->where('name', 'like', "%{$q}%")
+                      ->orWhereHas('designation', function($d) use ($q) {
+                          $d->where('title', 'like', "%{$q}%");
+                      })
+                      ->orWhereHas('department', function($dep) use ($q) {
+                          $dep->where('name', 'like', "%{$q}%")
+                             ->orWhere('code', 'like', "%{$q}%");
+                      });
+            })
+            ->limit(10)
+            ->get();
+
+        $data = $users->map(function($u) {
+            return [
+                'id' => $u->id,
+                'name' => $u->name,
+                'designation' => $u->designation ? $u->designation->title : '',
+                'department' => $u->department ? $u->department->code : '',
+            ];
+        });
+
+        return response()->json($data);
     }
 
     /**
@@ -221,13 +284,59 @@ class DocumentController extends Controller
     }
 
     /**
+     * Resolve CC user IDs from individual selection and group presets.
+     */
+    protected function resolveCcUserIds(array $ccUserIds = [], array $ccGroups = []): array
+    {
+        $resolvedIds = collect($ccUserIds);
+
+        foreach ($ccGroups as $group) {
+            if ($group === 'ps_vc') {
+                $ids = User::whereHas('designation', function($q) {
+                    $q->where(function($sub) {
+                        $sub->where('title', 'like', '%P.S%')
+                            ->orWhere('title', 'like', '%PS%')
+                            ->orWhere('title', 'like', '%P.A%')
+                            ->orWhere('title', 'like', '%PA%')
+                            ->orWhere('title', 'like', '%Secretary%')
+                            ->orWhere('title', 'like', '%Assistant%');
+                    })
+                    ->where('title', '!=', 'Vice Chancellor')
+                    ->where('title', 'not like', 'Vice Chancellor%')
+                    ->where('title', '!=', 'VC');
+                })->pluck('id');
+                $resolvedIds = $resolvedIds->merge($ids);
+            } elseif ($group === 'all_deans') {
+                $ids = User::whereHas('designation', function($q) {
+                    $q->where('title', 'like', '%Dean%')
+                      ->orWhere('title', 'like', '%Director%')
+                      ->orWhere('title', 'like', '%Chairman%')
+                      ->orWhere('title', 'like', '%Chairperson%');
+                })->pluck('id');
+                $resolvedIds = $resolvedIds->merge($ids);
+            } elseif ($group === 'sectional_heads') {
+                $ids = User::whereHas('designation', function($q) {
+                    $q->where('title', 'like', '%Head%')
+                      ->orWhere('title', 'like', '%Incharge%')
+                      ->orWhere('title', 'like', '%Sectional%')
+                      ->orWhere('title', 'like', '%Manager%');
+                })->pluck('id');
+                $resolvedIds = $resolvedIds->merge($ids);
+            }
+        }
+
+        return $resolvedIds->unique()->reject(fn($id) => $id == Auth::id())->values()->toArray();
+    }
+
+    /**
      * Show the form for creating a new document.
      */
     public function create()
     {
         $departments = Department::all();
         $users = User::with(['designation', 'department'])->where('id', '!=', Auth::id())->get();
-        return view('documents.create', compact('departments', 'users'));
+        $allUsers = User::with(['designation', 'department'])->where('id', '!=', Auth::id())->get();
+        return view('documents.create', compact('departments', 'users', 'allUsers'));
     }
 
     /**
@@ -243,6 +352,9 @@ class DocumentController extends Controller
             'forward_to' => ['required', 'exists:users,id'],
             'attachment' => ['nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,gif,zip,rar,txt', 'max:20480'], // 20MB limit
             'is_available_to_registrar' => ['nullable', 'boolean'],
+            'cc_users' => ['nullable', 'array'],
+            'cc_users.*' => ['exists:users,id'],
+            'cc_groups' => ['nullable', 'array'],
         ]);
 
         $receiver = User::findOrFail($validated['forward_to']);
@@ -269,6 +381,24 @@ class DocumentController extends Controller
             'attachment_path' => $attachmentPath,
             'is_available_to_registrar' => $request->has('is_available_to_registrar') ? $request->boolean('is_available_to_registrar') : true,
         ]);
+
+        // Resolve and attach CC recipients
+        $ccUserIds = $this->resolveCcUserIds(
+            $request->input('cc_users', []),
+            $request->input('cc_groups', [])
+        );
+
+        if (!empty($ccUserIds)) {
+            $document->ccUsers()->sync($ccUserIds);
+
+            // Send notification alerts to CC recipients
+            $ccNotif = \App\Models\Notification::create([
+                'title' => 'Copied for Info: ' . $document->file_number,
+                'message' => 'You received a copy of file "' . \Illuminate\Support\Str::limit($document->title, 50) . '" for information.',
+                'sender_id' => Auth::id()
+            ]);
+            $ccNotif->recipients()->attach($ccUserIds);
+        }
 
         // Create the initial tracking step
         DocumentTrack::create([
@@ -308,19 +438,35 @@ class DocumentController extends Controller
         $user = Auth::user();
         $document = Document::withTrashed()->findOrFail($id);
 
-        // Security check: only users in the flow or admins can view
+        // Security check: only users in the flow, CC recipients, or admins can view
         $isCreator = $document->creator_id === $user->id;
         $isHolder = $document->current_holder_id === $user->id;
         $isInTracks = $document->tracks()->where(function($q) use ($user) {
             $q->where('sender_id', $user->id)
               ->orWhere('receiver_id', $user->id);
         })->exists();
+        $isCcRecipient = $document->ccUsers()->where('user_id', $user->id)->exists();
+        $isCcOnly = $isCcRecipient && !$isHolder && !$isCreator && !$user->isSuperAdmin();
 
-        if ($user->isRegistrar() && !$document->is_available_to_registrar && !$isCreator && !$isHolder && !$isInTracks) {
+        // Registrar view-only: Registrar is accessing a file not directly assigned to them.
+        // They can see the tracking trail but NOT the comments/remarks.
+        $isRegistrarViewOnly = $user->isRegistrar()
+            && !$user->isSuperAdmin()
+            && !$isCreator
+            && !$isHolder
+            && !$isInTracks;
+
+        // Creator view-only: The file initiator can only track the file location.
+        // They cannot view comments until the file is assigned back to them.
+        $isCreatorViewOnly = $isCreator
+            && !$isHolder
+            && !$user->isSuperAdmin();
+
+        if ($user->isRegistrar() && !$document->is_available_to_registrar && !$isCreator && !$isHolder && !$isInTracks && !$isCcRecipient) {
             abort(403, 'Unauthorized access. This document is marked confidential from the Registrar Office.');
         }
 
-        if (!$isCreator && !$isHolder && !$isInTracks && !$user->canViewAllFiles()) {
+        if (!$isCreator && !$isHolder && !$isInTracks && !$isCcRecipient && !$user->canViewAllFiles()) {
             abort(403, 'Unauthorized access to this document.');
         }
 
@@ -333,6 +479,7 @@ class DocumentController extends Controller
         $users = User::with(['designation', 'department'])->where('id', '!=', Auth::id())->get();
         $comments = $document->comments()->with(['user.designation', 'user.department'])->get();
         $tracks = $document->tracks()->with(['sender.designation', 'sender.department', 'receiver.department'])->get();
+        $ccUsers = $document->ccUsers()->with(['designation', 'department'])->get();
 
         $unifiedComments = collect();
 
@@ -364,7 +511,12 @@ class DocumentController extends Controller
 
         $unifiedComments = $unifiedComments->sortByDesc('created_at')->values();
 
-        return view('documents.show', compact('document', 'departments', 'users', 'unifiedComments', 'tracks'));
+        $archivedComments = collect();
+        if ($user->isSuperAdmin()) {
+            $archivedComments = $document->comments()->onlyTrashed()->with(['user.designation', 'user.department'])->latest('deleted_at')->get();
+        }
+
+        return view('documents.show', compact('document', 'departments', 'users', 'unifiedComments', 'tracks', 'ccUsers', 'isCcOnly', 'archivedComments', 'isRegistrarViewOnly', 'isCreatorViewOnly'));
     }
 
     /**
@@ -445,6 +597,24 @@ class DocumentController extends Controller
             'current_department_id' => $receiver->department_id,
             'status' => $validated['status']
         ]);
+
+        // Resolve and attach CC recipients when forwarding
+        $ccUserIds = $this->resolveCcUserIds(
+            $request->input('cc_users', []),
+            $request->input('cc_groups', [])
+        );
+
+        if (!empty($ccUserIds)) {
+            $document->ccUsers()->syncWithoutDetaching($ccUserIds);
+
+            // Send notification alerts to new CC recipients
+            $ccNotif = \App\Models\Notification::create([
+                'title' => 'Copied for Info: ' . $document->file_number,
+                'message' => 'You received a copy of file "' . \Illuminate\Support\Str::limit($document->title, 50) . '" for information.',
+                'sender_id' => Auth::id()
+            ]);
+            $ccNotif->recipients()->attach($ccUserIds);
+        }
 
         // Add track step
         DocumentTrack::create([
@@ -544,6 +714,112 @@ class DocumentController extends Controller
     }
 
     /**
+     * Archive / Soft-delete a comment (Super Admin only).
+     */
+    public function deleteComment(Request $request, Document $document, $id)
+    {
+        $user = Auth::user();
+        if (!$user->isSuperAdmin()) {
+            abort(403, 'Unauthorized access. Only Super Admin can archive remarks.');
+        }
+
+        $type = $request->input('type', 'comment');
+
+        if ($type === 'comment') {
+            $comment = Comment::where('document_id', $document->id)->findOrFail($id);
+            $comment->delete(); // Soft delete (moved to archived)
+        } elseif ($type === 'track_remarks') {
+            $track = DocumentTrack::where('document_id', $document->id)->findOrFail($id);
+            $track->update([
+                'remarks' => 'File forwarded.',
+                'attachment_path' => null
+            ]);
+        }
+
+        return redirect()->route('documents.show', $document->id)
+            ->with('success', 'Remark moved to Archived Comments successfully.');
+    }
+
+    /**
+     * Restore an archived comment (Super Admin only).
+     */
+    public function restoreComment(Document $document, $id)
+    {
+        $user = Auth::user();
+        if (!$user->isSuperAdmin()) {
+            abort(403, 'Unauthorized access. Only Super Admin can restore remarks.');
+        }
+
+        $comment = Comment::onlyTrashed()->where('document_id', $document->id)->findOrFail($id);
+        $comment->restore();
+
+        return redirect()->route('documents.show', $document->id)
+            ->with('success', 'Comment restored to active remarks successfully.');
+    }
+
+    /**
+     * Permanently delete an archived comment (Super Admin only).
+     */
+    public function forceDeleteComment(Document $document, $id)
+    {
+        $user = Auth::user();
+        if (!$user->isSuperAdmin()) {
+            abort(403, 'Unauthorized access. Only Super Admin can permanently delete remarks.');
+        }
+
+        $comment = Comment::onlyTrashed()->where('document_id', $document->id)->findOrFail($id);
+        if ($comment->attachment_path && Storage::exists($comment->attachment_path)) {
+            Storage::delete($comment->attachment_path);
+        }
+        $comment->forceDelete();
+
+        return redirect()->route('documents.show', $document->id)
+            ->with('success', 'Comment permanently deleted from system.');
+    }
+
+    /**
+     * Bulk Action on comments (archive, restore, force delete) (Super Admin only).
+     */
+    public function bulkCommentAction(Request $request, Document $document)
+    {
+        $user = Auth::user();
+        if (!$user->isSuperAdmin()) {
+            abort(403, 'Unauthorized access. Only Super Admin can perform bulk actions on comments.');
+        }
+
+        $validated = $request->validate([
+            'action' => ['required', 'in:archive,restore,force_delete'],
+            'comment_ids' => ['required', 'array'],
+            'comment_ids.*' => ['integer']
+        ]);
+
+        $ids = $validated['comment_ids'];
+        $action = $validated['action'];
+
+        if ($action === 'archive') {
+            $count = Comment::where('document_id', $document->id)->whereIn('id', $ids)->delete();
+            return redirect()->route('documents.show', $document->id)
+                ->with('success', "{$count} remark(s) moved to Archived Comments successfully.");
+        } elseif ($action === 'restore') {
+            $count = Comment::onlyTrashed()->where('document_id', $document->id)->whereIn('id', $ids)->restore();
+            return redirect()->route('documents.show', $document->id)
+                ->with('success', "{$count} archived remark(s) restored successfully.");
+        } elseif ($action === 'force_delete') {
+            $comments = Comment::onlyTrashed()->where('document_id', $document->id)->whereIn('id', $ids)->get();
+            foreach ($comments as $c) {
+                if ($c->attachment_path && Storage::exists($c->attachment_path)) {
+                    Storage::delete($c->attachment_path);
+                }
+                $c->forceDelete();
+            }
+            return redirect()->route('documents.show', $document->id)
+                ->with('success', count($comments) . " archived remark(s) permanently deleted.");
+        }
+
+        return redirect()->route('documents.show', $document->id);
+    }
+
+    /**
      * Securely download document attachment.
      */
     public function download(Document $document)
@@ -579,8 +855,13 @@ class DocumentController extends Controller
             $q->where('sender_id', $user->id)
               ->orWhere('receiver_id', $user->id);
         })->exists();
+        $isCcRecipient = $document->ccUsers()->where('user_id', $user->id)->exists();
 
-        if (!$isCreator && !$isHolder && !$isInTracks && !$user->canViewAllFiles()) {
+        if ($user->isRegistrar() && !$document->is_available_to_registrar && !$isCreator && !$isHolder && !$isInTracks && !$isCcRecipient) {
+            abort(403, 'Unauthorized access. This document is marked confidential from the Registrar Office.');
+        }
+
+        if (!$isCreator && !$isHolder && !$isInTracks && !$isCcRecipient && !$user->canViewAllFiles()) {
             abort(403, 'Unauthorized access.');
         }
 
@@ -620,9 +901,16 @@ class DocumentController extends Controller
         $documentsQuery = Document::whereIn('id', $documentIds)
             ->with(['creator.designation', 'currentHolder.designation', 'currentDepartment']);
 
+        $creatorId = $request->input('creator_id');
+        if (!empty($creatorId)) {
+            $documentsQuery->where('creator_id', $creatorId);
+        }
+
         if (!empty($filter)) {
             if ($filter === 'pending') {
                 $documentsQuery->where('status', 'pending');
+            } elseif ($filter === 'forwarded') {
+                $documentsQuery->where('status', 'forwarded');
             } elseif ($filter === 'completed') {
                 $documentsQuery->where('status', 'completed');
             } elseif (in_array($filter, ['normal', 'urgent', 'most_urgent'])) {
@@ -643,7 +931,9 @@ class DocumentController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        return view('documents.my_remarks', compact('documents', 'user', 'search', 'filter'));
+        $selectedCreator = !empty($creatorId) ? User::with('designation')->find($creatorId) : null;
+
+        return view('documents.my_remarks', compact('documents', 'user', 'search', 'filter', 'creatorId', 'selectedCreator'));
     }
 
     /**
@@ -744,5 +1034,75 @@ class DocumentController extends Controller
 
         return redirect()->route('documents.index', ['tab' => 'trash'])
             ->with('success', 'File "' . $fileNumber . '" permanently deleted from the database.');
+    }
+
+    /**
+     * Display central list of all archived comments across the university (Super Admin only).
+     */
+    public function archivedCommentsIndex(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->isSuperAdmin()) {
+            abort(403, 'Unauthorized access.');
+        }
+
+        $search = trim($request->query('search', ''));
+
+        $query = Comment::onlyTrashed()->with(['document', 'user.designation', 'user.department']);
+
+        if (!empty($search)) {
+            $query->where(function($q) use ($search) {
+                $q->where('content', 'like', "%{$search}%")
+                  ->orWhereHas('document', function($d) use ($search) {
+                      $d->where('file_number', 'like', "%{$search}%")
+                        ->orWhere('title', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('user', function($u) use ($search) {
+                      $u->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $archivedComments = $query->latest('deleted_at')->paginate(15)->withQueryString();
+
+        return view('documents.archived_comments', compact('archivedComments', 'search'));
+    }
+
+    /**
+     * Bulk Action for central archived comments (Super Admin only).
+     */
+    public function bulkArchivedCommentsAll(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->isSuperAdmin()) {
+            abort(403, 'Unauthorized access.');
+        }
+
+        $validated = $request->validate([
+            'action' => ['required', 'in:restore,force_delete'],
+            'comment_ids' => ['required', 'array'],
+            'comment_ids.*' => ['integer']
+        ]);
+
+        $ids = $validated['comment_ids'];
+        $action = $validated['action'];
+
+        if ($action === 'restore') {
+            $count = Comment::onlyTrashed()->whereIn('id', $ids)->restore();
+            return redirect()->route('archives.comments')
+                ->with('success', "{$count} archived remark(s) restored successfully.");
+        } elseif ($action === 'force_delete') {
+            $comments = Comment::onlyTrashed()->whereIn('id', $ids)->get();
+            foreach ($comments as $c) {
+                if ($c->attachment_path && Storage::exists($c->attachment_path)) {
+                    Storage::delete($c->attachment_path);
+                }
+                $c->forceDelete();
+            }
+            return redirect()->route('archives.comments')
+                ->with('success', count($comments) . " archived remark(s) permanently deleted.");
+        }
+
+        return redirect()->route('archives.comments');
     }
 }
