@@ -1,17 +1,17 @@
 @php
     $u = Auth::user();
-    
-    // 1. Files Created: Active files created by logged in user (excluding completed)
+
+    // 1. Files Created: Active (non-completed) files created by this user
     $statMyFiles = \App\Models\Document::where('creator_id', $u->id)
         ->whereNotIn('status', ['draft', 'completed'])
         ->count();
 
-    // 2. Marked to Me: Active files currently assigned to logged in user
+    // 2. Marked to Me: Active files currently assigned to this user
     $statMarkedToMe = \App\Models\Document::where('current_holder_id', $u->id)
         ->whereNotIn('status', ['draft', 'completed'])
         ->count();
 
-    // 3. Closed Files: Completed files user is involved in
+    // 3. Closed Files: Completed files this user is involved in
     $closedQuery = \App\Models\Document::where('status', 'completed');
     if (!$u->canViewAllFiles()) {
         $closedQuery->where(function($q) use ($u) {
@@ -24,8 +24,24 @@
     }
     $statClosedFiles = $closedQuery->count();
 
-    // 4. Comments I Made
+    // 4. Open Files: Active files where user is the creator OR current holder.
+    //    Intentionally excludes historical track participants to avoid inflated counts.
+    $statOpenFiles = \App\Models\Document::whereNotIn('status', ['draft', 'completed'])
+        ->where(function($q) use ($u) {
+            $q->where('creator_id', $u->id)
+              ->orWhere('current_holder_id', $u->id);
+        })
+        ->count();
+
+    // 5. Comments I Made
     $statComments = \App\Models\Comment::where('user_id', $u->id)->count();
+
+    // 6. Copied to Me (CC): Active files CC'd to this user (not holder, not creator)
+    $statCcFiles = $u->ccDocuments()
+        ->where('current_holder_id', '!=', $u->id)
+        ->where('creator_id', '!=', $u->id)
+        ->whereNotIn('status', ['draft', 'completed'])
+        ->count();
 
     // Active Route & Tab Detection
     $isRouteMyFiles = request()->routeIs('documents.myFiles');
@@ -36,7 +52,9 @@
     $activeCard1 = $isRouteMyFiles;
     $activeCard2 = $isRouteIndex && ($currentTab === 'inbox');
     $activeCard3 = $isRouteIndex && ($currentTab === 'completed');
+    $activeCard4 = $isRouteIndex && ($currentTab === 'open');
     $activeCard5 = $isRouteRemarks;
+    $activeCard6 = $isRouteIndex && ($currentTab === 'cc');
 @endphp
 
 <!-- Stat Cards Bar (High Contrast Active Card Highlighting) -->

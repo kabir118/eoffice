@@ -52,6 +52,8 @@ class DashboardController extends Controller
             ->whereNotIn('status', ['draft', 'completed'])
             ->count();
 
+        $unreadNotificationsCount = $user->unreadNotifications()->where('title', 'NOT LIKE', 'Support Query%')->count();
+
         // 2. Fetch Files Requiring User Action (Files Need Your Attention)
         $heldQuery = Document::with(['creator.designation', 'currentHolder.designation', 'currentDepartment', 'tracks.sender.designation', 'tracks.sender.department'])
             ->where('current_holder_id', $user->id)
@@ -104,6 +106,7 @@ class DashboardController extends Controller
             'markedToMeCount',
             'commentsCount',
             'urgentCount',
+            'unreadNotificationsCount',
             'attentionFiles',
             'search',
             'filter',

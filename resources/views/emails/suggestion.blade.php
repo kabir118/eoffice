@@ -19,7 +19,13 @@
         .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 0.85rem; }
         .meta-table td { padding: 8px 12px; border: 1px solid #e2e8f0; }
         .meta-table td:first-child { background-color: #f6f8fa; font-weight: 700; color: #013756; width: 130px; }
-        .message-box { background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #013756; border-radius: 6px; padding: 18px 20px; font-size: 0.92rem; line-height: 1.7; color: #2c3e50; white-space: pre-line; }
+        .message-box { background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #013756; border-radius: 6px; padding: 18px 20px; font-size: 0.92rem; line-height: 1.7; color: #2c3e50; }
+        .message-box p { margin: 0 0 10px 0; }
+        .message-box p:last-child { margin-bottom: 0; }
+        .message-box img { max-width: 100%; height: auto; border-radius: 6px; margin: 10px 0; display: block; }
+        .message-box ul, .message-box ol { margin: 0 0 10px 0; padding-left: 20px; }
+        .message-box blockquote { border-left: 3px solid #cbd5e1; margin: 10px 0; padding-left: 12px; color: #64748b; font-style: italic; }
+        .message-box pre { background: #e2e8f0; padding: 10px; border-radius: 4px; overflow-x: auto; font-family: monospace; }
         .footer { background-color: #f4f6f9; padding: 18px 32px; text-align: center; border-top: 1px solid #e2e8f0; }
         .footer p { margin: 0; font-size: 0.72rem; color: #94a3b8; }
     </style>
@@ -69,7 +75,7 @@
                 </tr>
             </table>
 
-            <div class="message-box">{{ $messageBody }}</div>
+            <div class="message-box">{!! $messageBody !!}</div>
         </div>
 
         <!-- Footer -->

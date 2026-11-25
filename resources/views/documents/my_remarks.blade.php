@@ -120,24 +120,10 @@
                                     @endif
                                 </td>
                                 <td style="text-align: center; white-space: nowrap;">
-                                    <button onclick="toggleComments({{ $doc->id }})" class="btn btn-accent btn-sm" id="btn-toggle-{{ $doc->id }}" style="padding: 5px 10px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
-                                        <i class="bi bi-chat-square-text-fill"></i>
-                                        <span>My Comments</span>
-                                    </button>
                                     <a href="{{ route('documents.show', $doc->id) }}" class="btn btn-primary btn-sm" style="padding: 5px 10px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px; text-decoration: none;">
                                         <i class="bi bi-folder2-open"></i>
                                         <span>Open File</span>
                                     </a>
-                                </td>
-                            </tr>
-                            <!-- Expandable comments row -->
-                            <tr id="comments-row-{{ $doc->id }}" style="display: none;">
-                                <td colspan="6" style="padding: 0; border-top: none;">
-                                    <div id="comments-container-{{ $doc->id }}" style="padding: 15px 20px; background-color: rgba(37,111,136,0.02); border-left: 4px solid var(--primary-color);">
-                                        <div style="text-align: center; padding: 15px; color: var(--text-muted); font-size: 0.85rem;">
-                                            <i class="bi bi-hourglass-split"></i> Loading comments...
-                                        </div>
-                                    </div>
                                 </td>
                             </tr>
                         @endforeach
@@ -163,64 +149,6 @@
 
 @section('scripts')
 <script>
-    const loadedComments = {};
-    const commentsBaseUrl = "{{ url('/documents') }}";
-
-    function toggleComments(docId) {
-        const row = document.getElementById('comments-row-' + docId);
-        const btn = document.getElementById('btn-toggle-' + docId);
-
-        if (row.style.display === 'none') {
-            row.style.display = 'table-row';
-            btn.innerHTML = '<i class="bi bi-chevron-up"></i> <span>Hide</span>';
-
-            if (!loadedComments[docId]) {
-                fetchComments(docId);
-            }
-        } else {
-            row.style.display = 'none';
-            btn.innerHTML = '<i class="bi bi-chat-square-text-fill"></i> <span>My Comments</span>';
-        }
-    }
-
-    function fetchComments(docId) {
-        const container = document.getElementById('comments-container-' + docId);
-
-        fetch(commentsBaseUrl + '/' + docId + '/my-comments', {
-            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then(res => res.json())
-        .then(data => {
-            loadedComments[docId] = true;
-            if (data.comments.length === 0) {
-                container.innerHTML = '<div style="text-align: center; padding: 15px; color: var(--text-muted); font-size: 0.85rem;"><i class="bi bi-chat-square"></i> No comments from you on this file.</div>';
-                return;
-            }
-
-            let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
-            html += '<div style="font-size: 0.78rem; font-weight: 600; color: var(--primary-dark); margin-bottom: 2px;"><i class="bi bi-chat-left-quote-fill"></i> Your Comments (' + data.comments.length + ')</div>';
-
-            data.comments.forEach(function(c, i) {
-                html += '<div style="background: var(--white); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px;">';
-                html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">';
-                html += '<span style="font-size: 0.75rem; font-weight: 600; color: var(--primary-color);">#' + (i + 1) + '</span>';
-                html += '<span style="font-size: 0.72rem; color: var(--text-muted);">' + c.date + ' (' + c.ago + ')</span>';
-                html += '</div>';
-                html += '<p style="font-size: 0.85rem; color: var(--text-main); margin: 0; white-space: pre-line;">' + escapeHtml(c.content) + '</p>';
-                if (c.attachment) {
-                    html += '<div style="margin-top: 6px;"><a href="' + c.download_url + '" style="font-size: 0.75rem; color: var(--primary-color); text-decoration: none; font-weight: 600;"><i class="bi bi-paperclip"></i> ' + escapeHtml(c.attachment) + '</a></div>';
-                }
-                html += '</div>';
-            });
-
-            html += '</div>';
-            container.innerHTML = html;
-        })
-        .catch(err => {
-            container.innerHTML = '<div style="text-align: center; padding: 15px; color: #e74c3c; font-size: 0.85rem;"><i class="bi bi-exclamation-triangle"></i> Failed to load comments.</div>';
-        });
-    }
-
     // Live Creator Autocomplete Search
     document.addEventListener('DOMContentLoaded', function() {
         const creatorInput = document.getElementById('creator_search_input');

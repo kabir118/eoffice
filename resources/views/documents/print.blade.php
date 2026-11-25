@@ -277,6 +277,7 @@
         <p>{{ $document->description }}</p>
     </div>
 
+    @if(isset($canViewComments) && $canViewComments)
     <!-- All Comments & Remarks -->
     <h2 class="section-title">📋 Comments & Remarks ({{ $unifiedComments->count() }})</h2>
 
@@ -346,6 +347,7 @@
     @else
         <p style="text-align: center; color: #999; padding: 15px 0; font-style: italic;">No comments or remarks recorded on this file.</p>
     @endif
+    @endif
 
     <!-- Routing History -->
     <h2 class="section-title">🔄 Routing History ({{ $tracks->count() }} Transfers)</h2>
@@ -382,7 +384,7 @@
                             <span class="badge badge-{{ $track->status_at_transfer }}">{{ ucfirst($track->status_at_transfer) }}</span>
                         </td>
                         <td>
-                            @if($track->attachment_path)
+                            @if($track->attachment_path && (!isset($canViewComments) || $canViewComments))
                                 <span class="attachment-note">📎 {{ basename($track->attachment_path) }}</span>
                             @else
                                 <span style="color: #ccc;">—</span>

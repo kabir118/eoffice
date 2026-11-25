@@ -418,14 +418,6 @@ class DocumentController extends Controller
         ]);
         $notification->recipients()->attach($receiver->id);
 
-        // Send email alert to recipient
-        try {
-            \Illuminate\Support\Facades\Mail::to($receiver->email)
-                ->send(new \App\Mail\FileForwardedMail($document, 'File initiated and forwarded.', Auth::user()->name));
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Failed sending email notification: " . $e->getMessage());
-        }
-
         return redirect()->route('documents.index')
             ->with('success', 'Document created and forwarded to ' . $receiver->name . '. File tracking ID: ' . $document->file_number);
     }
@@ -448,19 +440,16 @@ class DocumentController extends Controller
         $isCcRecipient = $document->ccUsers()->where('user_id', $user->id)->exists();
         $isCcOnly = $isCcRecipient && !$isHolder && !$isCreator && !$user->isSuperAdmin();
 
-        // Registrar view-only: Registrar is accessing a file not directly assigned to them.
-        // They can see the tracking trail but NOT the comments/remarks.
-        $isRegistrarViewOnly = $user->isRegistrar()
-            && !$user->isSuperAdmin()
-            && !$isCreator
-            && !$isHolder
-            && !$isInTracks;
+        // Comments visibility rule:
+        // ONLY the current holder of the file and Super Admin can view comments.
+        // If an employee initiates a file (or handled it earlier), the comments are NOT visible
+        // to them or anyone else unless the file is currently holding by / assigned to them.
+        $canViewComments = ($isHolder || $user->isSuperAdmin());
+        $isTrackingOnly = !$canViewComments;
 
-        // Creator view-only: The file initiator can only track the file location.
-        // They cannot view comments until the file is assigned back to them.
-        $isCreatorViewOnly = $isCreator
-            && !$isHolder
-            && !$user->isSuperAdmin();
+        // Legacy compatibility flags for views
+        $isRegistrarViewOnly = $user->isRegistrar() && !$canViewComments;
+        $isCreatorViewOnly = $isCreator && !$canViewComments;
 
         if ($user->isRegistrar() && !$document->is_available_to_registrar && !$isCreator && !$isHolder && !$isInTracks && !$isCcRecipient) {
             abort(403, 'Unauthorized access. This document is marked confidential from the Registrar Office.');
@@ -477,46 +466,68 @@ class DocumentController extends Controller
 
         $departments = Department::all();
         $users = User::with(['designation', 'department'])->where('id', '!=', Auth::id())->get();
-        $comments = $document->comments()->with(['user.designation', 'user.department'])->get();
         $tracks = $document->tracks()->with(['sender.designation', 'sender.department', 'receiver.department'])->get();
         $ccUsers = $document->ccUsers()->with(['designation', 'department'])->get();
 
         $unifiedComments = collect();
+        $archivedComments = collect();
 
-        foreach ($comments as $comment) {
-            $unifiedComments->push((object)[
-                'type' => 'comment',
-                'user' => $comment->user,
-                'content' => $comment->content,
-                'created_at' => $comment->created_at,
-                'attachment_path' => $comment->attachment_path,
-                'id' => $comment->id
-            ]);
-        }
+        if ($canViewComments) {
+            $comments = $document->comments()->with(['user.designation', 'user.department'])->get();
 
-        foreach ($tracks as $track) {
-            $r = trim($track->remarks ?? '');
-            if (!empty($r) && !in_array($r, ['File forwarded.', 'File initiated and forwarded.'])) {
+            foreach ($comments as $comment) {
                 $unifiedComments->push((object)[
-                    'type' => 'track_remarks',
-                    'user' => $track->sender,
-                    'content' => $track->remarks,
-                    'created_at' => $track->created_at,
-                    'attachment_path' => $track->attachment_path,
-                    'id' => $track->id,
-                    'status' => $track->status_at_transfer
+                    'type' => 'comment',
+                    'user' => $comment->user,
+                    'content' => $comment->content,
+                    'created_at' => $comment->created_at,
+                    'attachment_path' => $comment->attachment_path,
+                    'id' => $comment->id
                 ]);
+            }
+
+            foreach ($tracks as $track) {
+                $r = trim($track->remarks ?? '');
+                if (!empty($r) && !in_array($r, ['File forwarded.', 'File initiated and forwarded.'])) {
+                    $alreadyInComments = $comments->contains(function ($c) use ($track, $r) {
+                        return $c->user_id == $track->sender_id && trim($c->content) == $r;
+                    });
+                    if (!$alreadyInComments) {
+                        $unifiedComments->push((object)[
+                            'type' => 'track_remarks',
+                            'user' => $track->sender,
+                            'content' => $track->remarks,
+                            'created_at' => $track->created_at,
+                            'attachment_path' => $track->attachment_path,
+                            'id' => $track->id,
+                            'status' => $track->status_at_transfer
+                        ]);
+                    }
+                }
+            }
+
+            $unifiedComments = $unifiedComments->sortByDesc('created_at')->values();
+
+            if ($user->isSuperAdmin()) {
+                $archivedComments = $document->comments()->onlyTrashed()->with(['user.designation', 'user.department'])->latest('deleted_at')->get();
             }
         }
 
-        $unifiedComments = $unifiedComments->sortByDesc('created_at')->values();
+        // Always fetch this user's OWN comments on this document (shown in tracking mode)
+        $myOwnComments = Comment::where('document_id', $document->id)
+            ->where('user_id', $user->id)
+            ->latest()
+            ->get()
+            ->map(function ($c) {
+                return (object)[
+                    'content'        => $c->content,
+                    'created_at'     => $c->created_at,
+                    'attachment_path'=> $c->attachment_path,
+                    'id'             => $c->id,
+                ];
+            });
 
-        $archivedComments = collect();
-        if ($user->isSuperAdmin()) {
-            $archivedComments = $document->comments()->onlyTrashed()->with(['user.designation', 'user.department'])->latest('deleted_at')->get();
-        }
-
-        return view('documents.show', compact('document', 'departments', 'users', 'unifiedComments', 'tracks', 'ccUsers', 'isCcOnly', 'archivedComments', 'isRegistrarViewOnly', 'isCreatorViewOnly'));
+        return view('documents.show', compact('document', 'departments', 'users', 'unifiedComments', 'tracks', 'ccUsers', 'isCcOnly', 'archivedComments', 'isRegistrarViewOnly', 'isCreatorViewOnly', 'canViewComments', 'isTrackingOnly', 'myOwnComments'));
     }
 
     /**
@@ -524,42 +535,67 @@ class DocumentController extends Controller
      */
     public function printView(Document $document)
     {
+        $user = Auth::user();
+
+        // Security check
+        $isCreator = $document->creator_id === $user->id;
+        $isHolder = $document->current_holder_id === $user->id;
+        $isInTracks = $document->tracks()->where(function($q) use ($user) {
+            $q->where('sender_id', $user->id)
+              ->orWhere('receiver_id', $user->id);
+        })->exists();
+        $isCcRecipient = $document->ccUsers()->where('user_id', $user->id)->exists();
+
+        if (!$isHolder && !$user->isSuperAdmin()) {
+            abort(403, 'Unauthorized access. Printing is only available to the current holder of the file.');
+        }
+
+        $canViewComments = true;
+
         $document->load(['creator.designation', 'currentHolder.designation', 'currentDepartment']);
 
-        $comments = $document->comments()->with(['user.designation', 'user.department'])->get();
         $tracks = $document->tracks()->with(['sender.designation', 'sender.department', 'receiver.designation', 'receiver.department'])->get();
 
         $unifiedComments = collect();
 
-        foreach ($comments as $comment) {
-            $unifiedComments->push((object)[
-                'type' => 'comment',
-                'user' => $comment->user,
-                'content' => $comment->content,
-                'created_at' => $comment->created_at,
-                'attachment_path' => $comment->attachment_path,
-                'id' => $comment->id
-            ]);
-        }
+        if ($canViewComments) {
+            $comments = $document->comments()->with(['user.designation', 'user.department'])->get();
 
-        foreach ($tracks as $track) {
-            $r = trim($track->remarks ?? '');
-            if (!empty($r) && !in_array($r, ['File forwarded.', 'File initiated and forwarded.'])) {
+            foreach ($comments as $comment) {
                 $unifiedComments->push((object)[
-                    'type' => 'track_remarks',
-                    'user' => $track->sender,
-                    'content' => $track->remarks,
-                    'created_at' => $track->created_at,
-                    'attachment_path' => $track->attachment_path,
-                    'id' => $track->id,
-                    'status' => $track->status_at_transfer
+                    'type' => 'comment',
+                    'user' => $comment->user,
+                    'content' => $comment->content,
+                    'created_at' => $comment->created_at,
+                    'attachment_path' => $comment->attachment_path,
+                    'id' => $comment->id
                 ]);
             }
+
+            foreach ($tracks as $track) {
+                $r = trim($track->remarks ?? '');
+                if (!empty($r) && !in_array($r, ['File forwarded.', 'File initiated and forwarded.'])) {
+                    $alreadyInComments = $comments->contains(function ($c) use ($track, $r) {
+                        return $c->user_id == $track->sender_id && trim($c->content) == $r;
+                    });
+                    if (!$alreadyInComments) {
+                        $unifiedComments->push((object)[
+                            'type' => 'track_remarks',
+                            'user' => $track->sender,
+                            'content' => $track->remarks,
+                            'created_at' => $track->created_at,
+                            'attachment_path' => $track->attachment_path,
+                            'id' => $track->id,
+                            'status' => $track->status_at_transfer
+                        ]);
+                    }
+                }
+            }
+
+            $unifiedComments = $unifiedComments->sortByDesc('created_at')->values();
         }
 
-        $unifiedComments = $unifiedComments->sortByDesc('created_at')->values();
-
-        return view('documents.print', compact('document', 'unifiedComments', 'tracks'));
+        return view('documents.print', compact('document', 'unifiedComments', 'tracks', 'canViewComments'));
     }
 
     /**
@@ -616,12 +652,23 @@ class DocumentController extends Controller
             $ccNotif->recipients()->attach($ccUserIds);
         }
 
+        // If remarks were entered, also log into Comment table for discussion history & user remarks log
+        $remarksText = !empty(trim($validated['remarks'] ?? '')) ? trim($validated['remarks']) : null;
+        if ($remarksText) {
+            Comment::create([
+                'document_id' => $document->id,
+                'user_id' => $user->id,
+                'content' => $remarksText,
+                'attachment_path' => $attachmentPath
+            ]);
+        }
+
         // Add track step
         DocumentTrack::create([
             'document_id' => $document->id,
             'sender_id' => $user->id,
             'receiver_id' => $receiver->id,
-            'remarks' => $validated['remarks'] ?? 'File forwarded.',
+            'remarks' => $remarksText ?? 'File forwarded.',
             'status_at_transfer' => $validated['status'],
             'attachment_path' => $attachmentPath
         ]);
@@ -633,14 +680,6 @@ class DocumentController extends Controller
             'sender_id' => $user->id
         ]);
         $notification->recipients()->attach($receiver->id);
-
-        // Send email alert to recipient
-        try {
-            \Illuminate\Support\Facades\Mail::to($receiver->email)
-                ->send(new \App\Mail\FileForwardedMail($document, $validated['remarks'] ?? 'File forwarded.', $user->name));
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Failed sending email notification: " . $e->getMessage());
-        }
 
         return redirect()->route('documents.index')
             ->with('success', 'Document forwarded to ' . $receiver->name . ' successfully.');
@@ -667,13 +706,23 @@ class DocumentController extends Controller
             'status' => $validated['status'],
         ]);
 
+        $remarksText = !empty(trim($validated['remarks'] ?? '')) ? trim($validated['remarks']) : null;
+        if ($remarksText) {
+            Comment::create([
+                'document_id' => $document->id,
+                'user_id' => $user->id,
+                'content' => $remarksText,
+                'attachment_path' => null
+            ]);
+        }
+
         // If completed, the holder remains the current one but the track finishes
         // We log a final self-track step for audit trail
         DocumentTrack::create([
             'document_id' => $document->id,
             'sender_id' => $user->id,
             'receiver_id' => $document->creator_id, // Route final notice back to creator
-            'remarks' => $validated['remarks'] ?? 'File status updated to: ' . $validated['status'],
+            'remarks' => $remarksText ?? 'File status updated to: ' . $validated['status'],
             'status_at_transfer' => $validated['status'],
             'received_at' => now()
         ]);
@@ -688,6 +737,11 @@ class DocumentController extends Controller
     public function comment(Request $request, Document $document)
     {
         $user = Auth::user();
+
+        // Only the active file holder or Super Admin can add comments
+        if ($document->current_holder_id !== $user->id && !$user->isSuperAdmin()) {
+            return back()->with('error', 'Unauthorized. Only the current holder of this file can add comments.');
+        }
 
         $validated = $request->validate([
             'content' => ['required', 'string'],
@@ -863,6 +917,10 @@ class DocumentController extends Controller
 
         if (!$isCreator && !$isHolder && !$isInTracks && !$isCcRecipient && !$user->canViewAllFiles()) {
             abort(403, 'Unauthorized access.');
+        }
+
+        if ($type === 'comment' && !$isHolder && !$user->isSuperAdmin() && $model->user_id !== $user->id) {
+            abort(403, 'Unauthorized access to comment attachment.');
         }
 
         if (!$model->attachment_path || !Storage::exists($model->attachment_path)) {

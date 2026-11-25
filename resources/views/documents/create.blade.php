@@ -68,13 +68,8 @@
 
             <!-- Description -->
             <div class="form-group">
-                <label for="description" class="form-label">
-                    Description / Initiator's Detailed Note
-                    <span style="float: right; font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">
-                        <span id="desc-counter">0</span> / 2000 characters
-                    </span>
-                </label>
-                <textarea name="description" id="description" class="form-control" style="min-height: 150px;" maxlength="2000" placeholder="Provide details, justification, and reference notes for this file..." required>{{ old('description') }}</textarea>
+                <label for="description" class="form-label">Description / Initiator's Detailed Note</label>
+                <textarea name="description" id="description" class="form-control" style="min-height: 150px;" placeholder="Provide details, justification, and reference notes for this file..." required>{{ old('description') }}</textarea>
             </div>
 
             <!-- Attachment -->
@@ -294,19 +289,5 @@
         function escapeHtml(str) {
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         }
-
-        // Description character counter
-        const descTextarea = document.getElementById('description');
-        const descCounter  = document.getElementById('desc-counter');
-        if (descTextarea && descCounter) {
-            const updateCounter = () => {
-                const len = descTextarea.value.length;
-                descCounter.textContent = len;
-                descCounter.style.color = len > 1800 ? '#e74c3c' : len > 1500 ? '#e67e22' : 'var(--text-muted)';
-            };
-            descTextarea.addEventListener('input', updateCounter);
-            updateCounter();
-        }
-
     </script>
 @endsection

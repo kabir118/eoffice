@@ -9,15 +9,27 @@ use Illuminate\Support\Facades\Mail;
 
 class SuggestionController extends Controller
 {
+    public function show()
+    {
+        return view('suggestions.index');
+    }
+
     /**
      * Handle the suggestion / issue email submission.
      */
     public function send(Request $request)
     {
         $validated = $request->validate([
-            'subject' => ['required', 'string', 'max:120'],
-            'message' => ['required', 'string', 'max:3000'],
+            'subject' => ['required', 'string', 'max:150'],
+            'message' => ['required', 'string'],
         ]);
+
+        // Verify that message contains either text or embedded image(s)
+        if (empty(trim(strip_tags($validated['message'], '<img>')))) {
+            return redirect()->back()
+                ->withErrors(['message' => 'Please provide message details or attach an image.'])
+                ->withInput();
+        }
 
         $user = Auth::user();
 

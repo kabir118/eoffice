@@ -133,29 +133,10 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @php
-                                            $isWithMe = $doc->current_holder_id === Auth::id();
-                                        @endphp
-                                        <div style="display: flex; flex-direction: column; gap: 5px; align-items: flex-start;">
-                                            @if($doc->status === 'completed')
-                                                <span class="badge badge-status-approved" style="font-size: 0.72rem;">Closed</span>
-                                            @elseif($isWithMe)
-                                                <span class="badge" style="background-color: rgba(39,174,96,0.12); color: #1e8449; font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 20px;">
-                                                    <i class="bi bi-person-check-fill"></i> With You
-                                                </span>
-                                            @else
-                                                <span class="badge" style="background-color: rgba(231,76,60,0.1); color: #c0392b; font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 20px;">
-                                                    <i class="bi bi-arrow-right-circle-fill"></i> In Transit
-                                                </span>
-                                                <div style="font-size: 0.7rem; color: var(--text-muted);">
-                                                    {{ $doc->currentHolder ? ($doc->currentHolder->designation ? $doc->currentHolder->designation->title : $doc->currentHolder->name) : '—' }}
-                                                </div>
-                                            @endif
-                                            <a href="{{ route('documents.show', $doc->id) }}" class="btn btn-primary btn-sm" style="padding: 4px 10px; margin-top: 4px; font-size: 0.78rem;">
-                                                <i class="bi bi-folder2-open"></i>
-                                                <span>Open</span>
-                                            </a>
-                                        </div>
+                                        <a href="{{ route('documents.show', $doc->id) }}" class="btn btn-primary btn-sm" style="padding: 6px 10px;">
+                                            <i class="bi bi-folder2-open"></i>
+                                            <span>Open</span>
+                                        </a>
                                     </td>
                                 </tr>
                             @endforeach

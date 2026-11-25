@@ -431,13 +431,8 @@
             
             <!-- Added Subject input field -->
             <div class="form-group" style="margin-bottom: 15px;">
-                <label for="subject" class="form-label">
-                    Subject / Title
-                    <span style="float: right; font-size: 0.75rem; color: var(--text-muted); font-weight: 400;" id="subject-counter-wrap">
-                        <span id="subject-counter">0</span> / 120
-                    </span>
-                </label>
-                <input type="text" name="subject" id="subject" class="form-control" maxlength="120" placeholder="e.g. Dashboard access issue or File Routing delay" required>
+                <label for="subject" class="form-label">Subject / Title</label>
+                <input type="text" name="subject" id="subject" class="form-control" placeholder="e.g. Dashboard access issue or File Routing delay" required>
             </div>
 
             <div class="form-group">
@@ -513,18 +508,5 @@
             form.submit();
         }
     }
-
-    // Subject character counter (live feedback in ticket modal)
-    document.addEventListener('DOMContentLoaded', function() {
-        const subjectInput = document.getElementById('subject');
-        const subjectCounter = document.getElementById('subject-counter');
-        if (subjectInput && subjectCounter) {
-            subjectInput.addEventListener('input', function() {
-                const len = this.value.length;
-                subjectCounter.textContent = len;
-                subjectCounter.style.color = len > 100 ? '#e74c3c' : len > 80 ? '#e67e22' : 'var(--text-muted)';
-            });
-        }
-    });
 </script>
 @endsection

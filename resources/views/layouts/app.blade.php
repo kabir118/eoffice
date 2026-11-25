@@ -35,32 +35,35 @@
                 <li class="sidebar-item {{ Request::is('documents/create') ? 'active' : '' }}">
                     <a href="{{ route('documents.create') }}" class="sidebar-link">
                         <i class="bi bi-file-earmark-plus"></i>
-                        <span>Create File</span>
+                        <span>Initiate File</span>
                     </a>
                 </li>
-                <li class="sidebar-item {{ Request::is('my-files') ? 'active' : '' }}">
-                    <a href="{{ route('documents.myFiles') }}" class="sidebar-link">
+                <li class="sidebar-item sidebar-has-submenu">
+                    <a href="{{ route('documents.myFiles') }}" class="sidebar-link sidebar-toggle" onclick="toggleSubmenu(event, this)">
                         <i class="bi bi-folder-symlink"></i>
                         <span>Files Created</span>
+                        <i class="bi bi-chevron-down submenu-arrow"></i>
                     </a>
-                </li>
-                <li class="sidebar-item {{ Request::is('documents') && !Request::query('tab') || Request::query('tab') === 'inbox' ? 'active' : '' }}">
-                    <a href="{{ route('documents.index', ['tab' => 'inbox']) }}" class="sidebar-link">
-                        <i class="bi bi-person-badge"></i>
-                        <span>Marked to Me</span>
-                    </a>
-                </li>
-                <li class="sidebar-item {{ Request::is('documents') && Request::query('tab') == 'completed' ? 'active' : '' }}">
-                    <a href="{{ route('documents.index', ['tab' => 'completed']) }}" class="sidebar-link">
-                        <i class="bi bi-check2-all"></i>
-                        <span>Closed Files</span>
-                    </a>
-                </li>
-                <li class="sidebar-item {{ Request::is('my-remarks') ? 'active' : '' }}">
-                    <a href="{{ route('documents.myRemarks') }}" class="sidebar-link">
-                        <i class="bi bi-chat-square-text"></i>
-                        <span>My Comments Log</span>
-                    </a>
+                    <ul class="sidebar-submenu">
+                        <li class="sidebar-subitem {{ Request::is('my-files') ? 'active' : '' }}">
+                            <a href="{{ route('documents.myFiles') }}" class="sidebar-sublink">
+                                <i class="bi bi-file-earmark-text"></i>
+                                <span>Files Created</span>
+                            </a>
+                        </li>
+                        <li class="sidebar-subitem {{ Request::is('documents') && Request::query('tab') != 'outbox' && Request::query('tab') != 'forwarded' && Request::query('tab') != 'completed' && Request::query('tab') != 'open' && Request::query('tab') != 'all' ? 'active' : '' }}">
+                            <a href="{{ route('documents.index', ['tab' => 'inbox']) }}" class="sidebar-sublink">
+                                <i class="bi bi-person-badge"></i>
+                                <span>Marked to Me</span>
+                            </a>
+                        </li>
+                        <li class="sidebar-subitem {{ Request::is('documents') && Request::query('tab') == 'completed' ? 'active' : '' }}">
+                            <a href="{{ route('documents.index', ['tab' => 'completed']) }}" class="sidebar-sublink">
+                                <i class="bi bi-check2-all"></i>
+                                <span>Closed Files</span>
+                            </a>
+                        </li>
+                    </ul>
                 </li>
                 @if(Auth::user()->canViewAllFiles())
                     <li class="sidebar-item {{ Request::is('documents') && Request::query('tab') == 'all' ? 'active' : '' }}">
@@ -70,9 +73,10 @@
                         </a>
                     </li>
                 @endif
-                <li class="sidebar-item">
-                    <a href="#" onclick="openSupportModal(event)" class="sidebar-link">
-                        <i class="bi bi-envelope-paper"></i>
+
+                <li class="sidebar-item {{ Request::is('support*') ? 'active' : '' }}">
+                    <a href="{{ route('support.index') }}" class="sidebar-link">
+                        <i class="bi bi-ticket-detailed"></i>
                         <span>Suggestions / Issues</span>
                     </a>
                 </li>
@@ -132,6 +136,7 @@
                     <h2>@yield('page_title', 'Dashboard')</h2>
                 </div>
                 <div class="top-header-actions">
+
                     <!-- User Profile Card -->
                     <div class="user-profile-menu">
                         <div class="user-avatar">
@@ -194,87 +199,7 @@
         </main>
     </div>
 
-    <!-- Suggestions / Issues Modal — sends email to admin -->
-    <div id="supportModal" class="modal-overlay">
-        <div class="modal-card" style="max-width: 540px;">
-            <div class="modal-header">
-                <h4><i class="bi bi-envelope-paper" style="color: var(--primary-color); margin-right: 6px;"></i> Suggestions / Issues</h4>
-                <button onclick="closeSupportModal()" class="modal-close"><i class="bi bi-x-lg"></i></button>
-            </div>
-
-            <form action="{{ route('suggestions.send') }}" method="POST">
-                @csrf
-
-                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px; line-height: 1.6;">
-                    Please describe your suggestion or issue clearly and it will be forwarded accordingly.
-                </p>
-
-                <div class="form-group">
-                    <label for="suggestion_subject" class="form-label">
-                        Subject
-                        <span style="float: right; font-size: 0.72rem; color: var(--text-muted); font-weight: 400;">
-                            <span id="sug-subject-counter">0</span> / 120
-                        </span>
-                    </label>
-                    <input type="text" name="subject" id="suggestion_subject" class="form-control" maxlength="120"
-                        placeholder="e.g. File routing delay or Dashboard access issue" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="suggestion_message" class="form-label">
-                        Your Message
-                        <span style="float: right; font-size: 0.72rem; color: var(--text-muted); font-weight: 400;">
-                            <span id="sug-msg-counter">0</span> / 3000
-                        </span>
-                    </label>
-                    <textarea name="message" id="suggestion_message" class="form-control" style="min-height: 140px;" maxlength="3000"
-                        placeholder="Describe your suggestion or issue in detail..." required></textarea>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" onclick="closeSupportModal()" class="btn btn-secondary">Cancel</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-send-fill"></i>
-                        <span>Send Message</span>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <script>
-        function openSupportModal(e) {
-            e.preventDefault();
-            document.getElementById('supportModal').classList.add('active');
-        }
-
-        function closeSupportModal() {
-            document.getElementById('supportModal').classList.remove('active');
-        }
-
-        // Live counters for suggestion modal fields
-        document.addEventListener('DOMContentLoaded', function() {
-            const subjInput = document.getElementById('suggestion_subject');
-            const subjCounter = document.getElementById('sug-subject-counter');
-            if (subjInput && subjCounter) {
-                subjInput.addEventListener('input', function() {
-                    const len = this.value.length;
-                    subjCounter.textContent = len;
-                    subjCounter.style.color = len > 100 ? '#e74c3c' : len > 80 ? '#e67e22' : 'var(--text-muted)';
-                });
-            }
-
-            const msgInput = document.getElementById('suggestion_message');
-            const msgCounter = document.getElementById('sug-msg-counter');
-            if (msgInput && msgCounter) {
-                msgInput.addEventListener('input', function() {
-                    const len = this.value.length;
-                    msgCounter.textContent = len;
-                    msgCounter.style.color = len > 2700 ? '#e74c3c' : len > 2000 ? '#e67e22' : 'var(--text-muted)';
-                });
-            }
-        });
-
         // Toggle sidebar submenu
         function toggleSubmenu(event, el) {
             event.preventDefault();

@@ -13,7 +13,7 @@
             <div class="card-title" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
                 <span>Document Information</span>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    @if(!$isRegistrarViewOnly && !$isCreatorViewOnly)
+                    @if($canViewComments)
                     <button onclick="toggleTrackingTrail()" class="btn btn-secondary btn-sm" id="btn-tracking-toggle" style="display: inline-flex; align-items: center; gap: 5px;">
                         <i class="bi bi-signpost-2-fill"></i>
                         <span>Show Tracking Trail</span>
@@ -230,15 +230,17 @@
         </div>
 
         {{-- Collapsible Tracking Trail --}}
-        <div id="tracking-trail-section" class="dashboard-card" style="margin-bottom: 0; display: {{ ($isRegistrarViewOnly || $isCreatorViewOnly) ? 'block' : 'none' }};">
+        <div id="tracking-trail-section" class="dashboard-card" style="margin-bottom: 0; display: {{ $isTrackingOnly ? 'block' : 'none' }};">
             <div class="card-title" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 20px;">
                 <span>Tracking Trail Flow</span>
-                @if(!$isRegistrarViewOnly && !$isCreatorViewOnly)
-                <button onclick="toggleTrackingTrail()" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 5px;">
-                    <i class="bi bi-x-lg"></i>
-                    <span>Close</span>
-                </button>
-                @endif
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    @if($canViewComments)
+                    <button onclick="toggleTrackingTrail()" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 5px;">
+                        <i class="bi bi-x-lg"></i>
+                        <span>Close</span>
+                    </button>
+                    @endif
+                </div>
             </div>
 
             <ul class="timeline">
@@ -288,7 +290,7 @@
                     <li class="timeline-item">
                         <span class="timeline-marker"><i class="bi bi-check-lg" style="font-size: 0.6rem; color: var(--primary-color);"></i></span>
                         <div class="timeline-content">
-                            <div class="timeline-header">
+                            <div class="timeline-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
                                 <span class="timeline-user">
                                     @if($track->sender->designation)
                                         <strong style="color: var(--primary-dark);">{{ $track->sender->designation->title }}</strong>
@@ -297,8 +299,51 @@
                                         <strong style="color: var(--primary-dark);">{{ $track->sender->name }}</strong>
                                     @endif
                                 </span>
-                                <span class="timeline-date">{{ $track->created_at->format('M d, h:i A') }}</span>
+                                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+                                    <span class="timeline-date">{{ $track->created_at->format('M d, h:i A') }}</span>
+                                    {{-- My Comments button: shown only on THIS user's sender rows, in tracking-only mode --}}
+                                    @if($isTrackingOnly && isset($myOwnComments) && $myOwnComments->count() > 0 && $track->sender_id === Auth::id())
+                                    <button onclick="toggleMyOwnComments({{ $track->id }})"
+                                        id="btn-my-own-comments-{{ $track->id }}"
+                                        data-count="{{ $myOwnComments->count() }}"
+                                        class="btn btn-primary btn-sm"
+                                        style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 600; padding: 5px 12px; background-color: var(--primary-color); color: #ffffff; border: 1px solid var(--primary-dark); border-radius: 6px; box-shadow: 0 2px 5px rgba(37,111,136,0.25); cursor: pointer; white-space: nowrap;">
+                                        <i class="bi bi-chat-left-quote-fill"></i>
+                                        <span>My Comments ({{ $myOwnComments->count() }})</span>
+                                    </button>
+                                    @endif
+                                </div>
                             </div>
+                            @if($isTrackingOnly && isset($myOwnComments) && $myOwnComments->count() > 0 && $track->sender_id === Auth::id())
+                            <div id="my-own-comments-panel-{{ $track->id }}" style="display: none; margin: 10px 0 12px 0; border: 1px solid rgba(37,111,136,0.25); border-left: 4px solid var(--primary-color); border-radius: var(--border-radius); background-color: rgba(37,111,136,0.03); padding: 12px 14px;">
+                                <div style="font-size: 0.78rem; font-weight: 700; color: var(--primary-dark); margin-bottom: 10px;">
+                                    <i class="bi bi-chat-left-quote-fill" style="color: var(--primary-color);"></i> My Remarks on This File
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    @foreach($myOwnComments as $i => $mc)
+                                    <div style="background: var(--white); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 4px;">
+                                            <span style="font-size: 0.72rem; font-weight: 700; color: var(--primary-color);">
+                                                <i class="bi bi-chat-fill"></i> Remark #{{ $i + 1 }}
+                                            </span>
+                                            <span style="font-size: 0.7rem; color: var(--text-muted);">
+                                                {{ $mc->created_at->format('M d, Y — h:i A') }} ({{ $mc->created_at->diffForHumans() }})
+                                            </span>
+                                        </div>
+                                        <p style="font-size: 0.85rem; color: var(--text-main); margin: 0; line-height: 1.6; white-space: pre-line;">{{ $mc->content }}</p>
+                                        @if($mc->attachment_path)
+                                        <div style="margin-top: 6px;">
+                                            <a href="{{ route('attachments.download', ['type' => 'comment', 'id' => $mc->id]) }}"
+                                               style="font-size: 0.72rem; color: var(--primary-color); text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                                                <i class="bi bi-paperclip"></i> {{ basename($mc->attachment_path) }}
+                                            </a>
+                                        </div>
+                                        @endif
+                                    </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                            @endif
                             <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 6px;">
                                 Routed to: 
                                 @if($track->receiver->designation)
@@ -316,13 +361,13 @@
                                     </span>
                                 @endif
                             </div>
-                            @if($track->remarks)
+                            @if($track->remarks && $canViewComments)
                                 <div class="timeline-remarks">
                                     {{ $track->remarks }}
                                 </div>
                             @endif
 
-                            @if($track->attachment_path)
+                            @if($track->attachment_path && $canViewComments)
                                 @php 
                                     $tExt = strtolower(pathinfo($track->attachment_path, PATHINFO_EXTENSION)); 
                                     $tUrl = route('attachments.download', ['type' => 'track', 'id' => $track->id]) . '?inline=true';
@@ -353,7 +398,7 @@
         </div>
 
         {{-- Comments & Actions Section --}}
-        @if(!$isRegistrarViewOnly && !$isCreatorViewOnly)
+        @if($canViewComments)
         <div class="dashboard-card" style="margin-bottom: 0;">
             <div class="card-title">
                 <span>File Remarks & Discussion ({{ $unifiedComments->count() }})</span>
@@ -557,118 +602,157 @@
                     <p style="font-size: 0.83rem; color: var(--text-muted); margin: 0;">You have received a copy of this file for your information only. Posting comments and forwarding actions are disabled unless the file is officially assigned/forwarded to you.</p>
                 </div>
             @else
-                <div style="display: grid; grid-template-columns: {{ ($document->current_holder_id === Auth::id() && $document->status !== 'completed') ? '1fr 360px' : '1fr' }}; gap: 25px; margin-top: 25px; padding-top: 25px; border-top: 1px solid var(--border-color);">
-                    
-                    <!-- Left: Write Comment Form -->
-                <div>
-                    <strong style="color: var(--primary-dark); display: block; margin-bottom: 12px; font-size: 0.9rem;">
-                        <i class="bi bi-pencil-square"></i> Add Minute Remarks / Comment
-                    </strong>
-                    <form action="{{ route('documents.comment', $document->id) }}" method="POST" enctype="multipart/form-data">
-                        @csrf
-                        <div class="form-group">
-                            <textarea name="content" class="form-control" placeholder="Add your official comment or minute remarks here..." style="min-height: 110px;" required></textarea>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <i class="bi bi-paperclip" style="color: var(--text-muted);"></i>
-                                <input type="file" name="attachment" class="form-control" style="font-size: 0.8rem; padding: 4px 8px; border: 1px dashed var(--border-color); width: 230px;" accept="image/*,application/pdf">
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-sm" style="padding: 7px 18px; font-weight: 600;">
-                                <i class="bi bi-chat-fill"></i>
-                                <span>Add Comment</span>
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Right: Forward / Resolve Actions Box -->
                 @if($document->current_holder_id === Auth::id() && $document->status !== 'completed')
-                    <div style="border: 2px solid var(--accent-color); border-radius: var(--border-radius); padding: 15px; background-color: #ffffff;">
-                        <strong style="color: var(--primary-dark); display: block; margin-bottom: 12px; font-size: 0.9rem;">
-                            <i class="bi bi-send-fill" style="color: var(--primary-color);"></i> File Routing Action
-                        </strong>
-
-                        <!-- Actions Header Tab Bar -->
-                        <div style="display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 15px; margin-left: -15px; margin-right: -15px; margin-top: -15px; background-color: #fafafa;">
-                            <button type="button" onclick="switchActionTab('forward')" id="tab-btn-forward" style="flex: 1; padding: 10px; background: none; border: none; font-weight: 700; font-size: 0.75rem; cursor: pointer; text-align: center; border-bottom: 3px solid var(--primary-color); color: var(--primary-color); display: flex; align-items: center; justify-content: center; gap: 5px; font-family: inherit;">
-                                <i class="bi bi-send-fill"></i>
-                                <span>Forward</span>
-                            </button>
-                            <button type="button" onclick="switchActionTab('resolve')" id="tab-btn-resolve" style="flex: 1; padding: 10px; background: none; border: none; font-weight: 700; font-size: 0.75rem; cursor: pointer; text-align: center; border-bottom: 3px solid transparent; color: #777; display: flex; align-items: center; justify-content: center; gap: 5px; font-family: inherit;">
-                                <i class="bi bi-check-circle-fill"></i>
-                                <span>Resolve</span>
-                            </button>
-                        </div>
-
-                        <!-- Forward File Form -->
-                        <div id="form-action-forward">
-                            <form action="{{ route('documents.forward', $document->id) }}" method="POST">
-                                @csrf
-                                <div class="form-group" style="margin-bottom: 12px;">
-                                    <label for="dept_select_action" class="form-label" style="font-size: 0.75rem;">Department</label>
-                                    <!-- Return to Initiator Quick Action -->
-                                    @if($document->creator_id !== Auth::id())
-                                    <button type="button" onclick="prefillCreator({{ $document->creator->id }}, {{ $document->creator->department_id ?? 'null' }})"
-                                        style="display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 700; color: var(--primary-color); background: rgba(1,55,86,0.06); border: 1px solid rgba(1,55,86,0.2); border-radius: 6px; padding: 3px 10px; cursor: pointer; margin-bottom: 6px; text-decoration: none;"
-                                        title="Quickly forward back to the file initiator">
-                                        <i class="bi bi-reply-fill"></i> Return to Initiator ({{ $document->creator->designation ? $document->creator->designation->title : $document->creator->name }})
+                    <div style="margin-top: 25px; padding-top: 25px; border-top: 1px solid var(--border-color);">
+                        <div style="border: 2px solid var(--primary-color); border-radius: var(--border-radius); padding: 22px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(37, 111, 136, 0.08);">
+                            
+                            <!-- Header with Action Switcher -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #eef2f5; padding-bottom: 14px; flex-wrap: wrap; gap: 12px;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="width: 36px; height: 36px; border-radius: 8px; background-color: rgba(37, 111, 136, 0.1); display: flex; align-items: center; justify-content: center;">
+                                        <i class="bi bi-send-check-fill" style="color: var(--primary-color); font-size: 1.15rem;"></i>
+                                    </div>
+                                    <div>
+                                        <strong style="color: var(--primary-dark); font-size: 1.05rem; display: block;">Place Remarks & Route File</strong>
+                                        <span style="font-size: 0.78rem; color: var(--text-muted);">Enter your remarks and select where the file will be going in one single step</span>
+                                    </div>
+                                </div>
+                                <div style="display: inline-flex; background-color: #f1f5f9; border-radius: 8px; padding: 4px; gap: 4px;">
+                                    <button type="button" onclick="switchActionTab('forward')" id="tab-btn-forward"
+                                        style="padding: 7px 18px; border: none; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; background: var(--primary-color); color: #ffffff; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
+                                        <i class="bi bi-send-fill"></i>
+                                        <span>Forward File</span>
                                     </button>
-                                    @endif
-                                    <select id="dept_select_action" class="form-control" style="padding: 6px 10px; font-size: 0.82rem;" onchange="filterUsersForAction(this.value)" required>
-                                        <option value="">-- Choose Department --</option>
-                                        @foreach($departments as $dept)
-                                            <option value="{{ $dept->id }}">{{ $dept->name }}</option>
-                                        @endforeach
-                                    </select>
+                                    <button type="button" onclick="switchActionTab('resolve')" id="tab-btn-resolve"
+                                        style="padding: 7px 18px; border: none; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; background: transparent; color: var(--text-muted); display: flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        <span>Resolve & Close File</span>
+                                    </button>
                                 </div>
+                            </div>
 
-                                <div class="form-group" style="margin-bottom: 12px;">
-                                    <label for="receiver_id" class="form-label" style="font-size: 0.75rem;">Recipient</label>
-                                    <select name="receiver_id" id="receiver_id" class="form-control" style="padding: 6px 10px; font-size: 0.82rem;" required disabled>
-                                        <option value="">-- Choose Staff --</option>
-                                    </select>
-                                </div>
+                            <!-- Forward File Form (Single-Step) -->
+                            <div id="form-action-forward">
+                                <form action="{{ route('documents.forward', $document->id) }}" method="POST" enctype="multipart/form-data">
+                                    @csrf
 
-                                <div class="form-group" style="margin-bottom: 12px;">
-                                    <label for="status" class="form-label" style="font-size: 0.75rem;">Action</label>
-                                    <select name="status" id="status" class="form-control" style="padding: 6px 10px; font-size: 0.82rem;" required>
-                                        <option value="forwarded" selected>Forwarded</option>
-                                        <option value="approved">Approved</option>
-                                        <option value="rejected">Rejected</option>
-                                    </select>
-                                </div>
+                                    <!-- Step 1: Official Remarks / Comment -->
+                                    <div class="form-group" style="margin-bottom: 18px;">
+                                        <label class="form-label" style="font-weight: 700; color: var(--primary-dark); font-size: 0.88rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                            <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                                <i class="bi bi-pencil-square" style="color: var(--primary-color);"></i> Minute Remarks / Comment <span style="color: #e74c3c;">*</span>
+                                            </span>
+                                            <span style="font-weight: 400; font-size: 0.75rem; color: var(--text-muted);">Recorded on file history & forwarded with the file</span>
+                                        </label>
+                                        <textarea name="remarks" class="form-control" rows="4" placeholder="Enter your official minute remarks, notes, instructions, or recommendation here..." style="min-height: 110px; line-height: 1.6; font-size: 0.9rem;" required></textarea>
+                                    </div>
 
-                                <button type="submit" class="btn btn-accent" style="width: 100%; justify-content: center; font-weight: 700; font-size: 0.82rem; padding: 8px;">
-                                    <i class="bi bi-send-fill"></i>
-                                    <span>Forward Document</span>
-                                </button>
-                            </form>
-                        </div>
+                                    <!-- Step 2: Destination & Action -->
+                                    <div style="background-color: rgba(37, 111, 136, 0.03); border: 1px solid rgba(37, 111, 136, 0.15); border-radius: 8px; padding: 18px; margin-bottom: 20px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                                            <strong style="font-size: 0.84rem; color: var(--primary-dark); text-transform: uppercase; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 6px;">
+                                                <i class="bi bi-geo-alt-fill" style="color: var(--primary-color);"></i> Route File To (Next Destination)
+                                            </strong>
+                                            @if($document->creator_id !== Auth::id())
+                                            <button type="button" onclick="prefillCreator({{ $document->creator->id }}, {{ $document->creator->department_id ?? 'null' }})"
+                                                style="display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; font-weight: 700; color: var(--primary-color); background: var(--white); border: 1px solid var(--primary-color); border-radius: 6px; padding: 4px 12px; cursor: pointer; transition: all 0.2s ease;"
+                                                title="Quickly route back to file initiator">
+                                                <i class="bi bi-reply-fill"></i> Return to Initiator ({{ $document->creator->designation ? $document->creator->designation->title : $document->creator->name }})
+                                            </button>
+                                            @endif
+                                        </div>
 
-                        <!-- Complete/Resolve File Form -->
-                        <div id="form-action-resolve" style="display: none;">
-                            <form action="{{ route('documents.status', $document->id) }}" method="POST">
-                                @csrf
-                                <input type="hidden" name="status" value="completed">
-                                
-                                <div class="form-group" style="margin-bottom: 12px;">
-                                    <label for="complete_remarks" class="form-label" style="font-size: 0.75rem;">Final Resolution Note</label>
-                                    <textarea name="remarks" id="complete_remarks" class="form-control" style="min-height: 60px; padding: 6px 10px; font-size: 0.82rem;" placeholder="Final actions taken..." required></textarea>
-                                </div>
+                                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+                                            <div class="form-group" style="margin-bottom: 0;">
+                                                <label for="dept_select_action" class="form-label" style="font-size: 0.8rem; font-weight: 600;">Department <span style="color: #e74c3c;">*</span></label>
+                                                <select id="dept_select_action" class="form-control" style="padding: 8px 12px; font-size: 0.85rem;" onchange="filterUsersForAction(this.value)" required>
+                                                    <option value="">-- Choose Department --</option>
+                                                    @foreach($departments as $dept)
+                                                        <option value="{{ $dept->id }}">{{ $dept->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
 
-                                <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; background-color: var(--priority-normal); font-weight: 700; font-size: 0.82rem; padding: 8px;">
-                                    <i class="bi bi-check-circle-fill"></i>
-                                    <span>Resolve & Close File</span>
-                                </button>
-                            </form>
+                                            <div class="form-group" style="margin-bottom: 0;">
+                                                <label for="receiver_id" class="form-label" style="font-size: 0.8rem; font-weight: 600;">Recipient Officer / Staff <span style="color: #e74c3c;">*</span></label>
+                                                <select name="receiver_id" id="receiver_id" class="form-control" style="padding: 8px 12px; font-size: 0.85rem;" required disabled>
+                                                    <option value="">-- Choose Staff --</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="form-group" style="margin-bottom: 0;">
+                                                <label for="status" class="form-label" style="font-size: 0.8rem; font-weight: 600;">Action / Decision <span style="color: #e74c3c;">*</span></label>
+                                                <select name="status" id="status" class="form-control" style="padding: 8px 12px; font-size: 0.85rem;" required>
+                                                    <option value="forwarded" selected>Forwarded</option>
+                                                    <option value="approved">Approved</option>
+                                                    <option value="rejected">Rejected</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <!-- Supporting Attachment (Optional) -->
+                                        <div style="margin-top: 15px; padding-top: 12px; border-top: 1px dashed rgba(37, 111, 136, 0.2); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin: 0; display: inline-flex; align-items: center; gap: 6px;">
+                                                <i class="bi bi-paperclip" style="color: var(--primary-color);"></i> Supporting Attachment (Optional):
+                                            </label>
+                                            <input type="file" name="attachment" onchange="validateAttachmentSize(this)" class="form-control" style="font-size: 0.8rem; padding: 5px 10px; max-width: 320px; background: var(--white);" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt">
+                                            <span style="font-size: 0.72rem; color: var(--text-muted);">(PDF, Word, Excel, Images up to 20MB)</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Submit Button -->
+                                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
+                                        <button type="submit" class="btn btn-primary" style="padding: 11px 32px; font-size: 0.92rem; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 6px rgba(37, 111, 136, 0.3);">
+                                            <i class="bi bi-send-fill"></i>
+                                            <span>Forward File with Remarks</span>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- Resolve File Form -->
+                            <div id="form-action-resolve" style="display: none;">
+                                <form action="{{ route('documents.status', $document->id) }}" method="POST">
+                                    @csrf
+                                    <input type="hidden" name="status" value="completed">
+                                    
+                                    <div class="form-group" style="margin-bottom: 18px;">
+                                        <label for="complete_remarks" class="form-label" style="font-weight: 700; color: var(--primary-dark); font-size: 0.88rem; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                                            <i class="bi bi-check-circle-fill" style="color: var(--priority-normal);"></i> Final Resolution Note / Remarks <span style="color: #e74c3c;">*</span>
+                                        </label>
+                                        <textarea name="remarks" id="complete_remarks" class="form-control" rows="4" style="min-height: 110px; line-height: 1.6; font-size: 0.9rem;" placeholder="State the final decisions, order passed, or reasons for resolving & closing this file..." required></textarea>
+                                    </div>
+
+                                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
+                                        <button type="submit" class="btn btn-primary" style="background-color: var(--priority-normal); border-color: var(--priority-normal); padding: 11px 32px; font-size: 0.92rem; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 6px rgba(46, 204, 113, 0.3);">
+                                            <i class="bi bi-check-circle-fill"></i>
+                                            <span>Resolve & Close File</span>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
                         </div>
                     </div>
                 @endif
-            </div>
             @endif
         </div>
-        @endif {{-- end isRegistrarViewOnly --}}
+        @else
+        <!-- Tracking View Active Notification Card -->
+        <div class="dashboard-card" style="margin-bottom: 0; background-color: #f8fafc; border: 1px solid var(--border-color); border-left: 5px solid var(--primary-color);">
+            <div style="display: flex; align-items: center; gap: 16px; padding: 6px 0;">
+                <div style="width: 44px; height: 44px; border-radius: 50%; background-color: rgba(1, 55, 86, 0.08); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <i class="bi bi-shield-lock-fill" style="font-size: 1.3rem; color: var(--primary-color);"></i>
+                </div>
+                <div>
+                    <strong style="font-size: 0.95rem; color: var(--primary-dark); display: block; margin-bottom: 3px;">File Tracking Mode Active</strong>
+                    <p style="font-size: 0.84rem; color: var(--text-muted); margin: 0; line-height: 1.5;">
+                        This file is currently in circulation and assigned to <strong>{{ $document->currentHolder->name }}{{ $document->currentHolder->designation ? ' (' . $document->currentHolder->designation->title . ')' : '' }}</strong>. Official minute remarks and discussion are restricted to the active file holder and will become available when the file is assigned to you.
+                    </p>
+                </div>
+            </div>
+        </div>
+        @endif
     </div>
 @endsection
 
@@ -753,6 +837,21 @@
             } else {
                 section.style.display = 'none';
                 btn.innerHTML = '<i class="bi bi-signpost-2-fill"></i> <span>Show Tracking Trail</span>';
+            }
+        }
+
+        function toggleMyOwnComments(trackId) {
+            const panel = document.getElementById('my-own-comments-panel-' + trackId);
+            const btn   = document.getElementById('btn-my-own-comments-' + trackId);
+            if (!panel) return;
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                if (btn) btn.innerHTML = '<i class="bi bi-eye-slash-fill"></i> <span>Hide Comments</span>';
+            } else {
+                panel.style.display = 'none';
+                const count = btn ? btn.dataset.count : '';
+                if (btn) btn.innerHTML = '<i class="bi bi-chat-left-quote-fill"></i> <span>My Comments (' + count + ')</span>';
             }
         }
 
@@ -850,17 +949,25 @@
                 if (tabId === 'forward') {
                     formForward.style.display = 'block';
                     formResolve.style.display = 'none';
-                    btnForward.style.borderBottomColor = 'var(--primary-color)';
-                    btnForward.style.color = 'var(--primary-color)';
-                    btnResolve.style.borderBottomColor = 'transparent';
-                    btnResolve.style.color = '#777';
+                    if (btnForward) {
+                        btnForward.style.backgroundColor = 'var(--primary-color)';
+                        btnForward.style.color = '#ffffff';
+                    }
+                    if (btnResolve) {
+                        btnResolve.style.backgroundColor = 'transparent';
+                        btnResolve.style.color = 'var(--text-muted)';
+                    }
                 } else {
                     formForward.style.display = 'none';
                     formResolve.style.display = 'block';
-                    btnResolve.style.borderBottomColor = 'var(--primary-color)';
-                    btnResolve.style.color = 'var(--primary-color)';
-                    btnForward.style.borderBottomColor = 'transparent';
-                    btnForward.style.color = '#777';
+                    if (btnResolve) {
+                        btnResolve.style.backgroundColor = 'var(--priority-normal)';
+                        btnResolve.style.color = '#ffffff';
+                    }
+                    if (btnForward) {
+                        btnForward.style.backgroundColor = 'transparent';
+                        btnForward.style.color = 'var(--text-muted)';
+                    }
                 }
             }
 
@@ -876,6 +983,16 @@
                     const receiverSelect = document.getElementById('receiver_id');
                     receiverSelect.value = creatorId;
                 }, 100);
+            }
+            function validateAttachmentSize(input) {
+                if (input.files && input.files[0]) {
+                    const file = input.files[0];
+                    const maxSize = 20 * 1024 * 1024; // 20 MB
+                    if (file.size > maxSize) {
+                        alert('The selected file (' + (file.size / (1024 * 1024)).toFixed(1) + ' MB) exceeds the maximum allowed size of 20 MB. Please choose a smaller file.');
+                        input.value = '';
+                    }
+                }
             }
         </script>
     @endif

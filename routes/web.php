@@ -6,6 +6,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\SuggestionController;
 use App\Http\Controllers\DesignationController;
 
 // 1. Root redirect
@@ -27,7 +29,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // Suggestions / Issues — sends email to admin
-    Route::post('/suggestions', [\App\Http\Controllers\SuggestionController::class, 'send'])->name('suggestions.send');
+    Route::get('/support', [SuggestionController::class, 'show'])->name('support.index');
+    Route::post('/support', [SuggestionController::class, 'send'])->name('support.store');
 
     // User Profile Change Password
     Route::get('/profile/password', [UserController::class, 'showPasswordForm'])->name('profile.password');
@@ -41,7 +44,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
     Route::get('/documents/{document}/print', [DocumentController::class, 'printView'])->name('documents.print');
     Route::post('/documents/{document}/forward', [DocumentController::class, 'forward'])->name('documents.forward');
+    Route::get('/documents/{document}/forward', fn($document) => redirect()->route('documents.show', $document));
     Route::post('/documents/{document}/status', [DocumentController::class, 'updateStatus'])->name('documents.status');
+    Route::get('/documents/{document}/status', fn($document) => redirect()->route('documents.show', $document));
     Route::post('/documents/{document}/comment', [DocumentController::class, 'comment'])->name('documents.comment');
     Route::delete('/documents/{document}/comments/{id}', [DocumentController::class, 'deleteComment'])->name('documents.deleteComment');
     Route::post('/documents/{document}/comments/{id}/restore', [DocumentController::class, 'restoreComment'])->name('documents.restoreComment');
@@ -56,6 +61,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/my-remarks', [DocumentController::class, 'myRemarks'])->name('documents.myRemarks');
     Route::get('/documents/{document}/my-comments', [DocumentController::class, 'myComments'])->name('documents.myComments');
     Route::get('/users/search', [DocumentController::class, 'searchUsers'])->name('users.search');
+
+    // e-Notifications Routes
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'read'])->name('notifications.read');
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.readAll');
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+    Route::post('/notifications/{id}/restore', [NotificationController::class, 'restore'])->name('notifications.restore');
+    Route::delete('/notifications/{id}/force-delete', [NotificationController::class, 'forceDelete'])->name('notifications.forceDelete');
 
     // 4. Admin Only Routes
     Route::middleware('admin')->group(function () {
